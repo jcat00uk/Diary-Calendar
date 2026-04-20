@@ -1,0 +1,144 @@
+/* Chronicle — Individual day card styles */
+
+.day-card {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  position: relative;
+}
+
+.day-card.today {
+  border: 1.5px solid var(--today-border);
+}
+
+.day-card.weekend-half {
+  min-height: 90px;
+}
+
+.day-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.day-card.pressing {
+  background: var(--bg-secondary);
+}
+
+.day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 5px;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.day-name {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.day-number {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.day-card.today .day-name,
+.day-card.today .day-number {
+  color: var(--today-text);
+}
+
+.day-card.weekend .day-name,
+.day-card.weekend .day-number {
+  color: var(--text-tertiary);
+}
+
+.events-strip {
+  padding: 4px 6px 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.event-pill {
+  display: flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.event-pill--event {
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue-text);
+}
+
+.event-pill--todo {
+  background: var(--accent-green-bg);
+  color: var(--accent-green-text);
+}
+
+.event-pill--reminder {
+  background: var(--accent-amber-bg);
+  color: var(--accent-amber-text);
+}
+
+.event-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.events-more {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding: 1px 5px;
+}
+
+.diary-area {
+  flex: 1;
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 22px;
+  outline: none;
+  overflow: hidden;
+  cursor: text;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 21px,
+    var(--color-border) 21px,
+    var(--color-border) 22px
+  );
+  background-position: 0 27px;
+  min-height: 60px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.diary-area:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  font-style: italic;
+  pointer-events: none;
+}
+
+.day-card.weekend-half .diary-area {
+  min-height: 32px;
+  background-position: 0 26px;
+}

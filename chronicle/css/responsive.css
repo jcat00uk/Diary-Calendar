@@ -1,0 +1,49 @@
+/* Chronicle — Responsive layout, safe-area, desktop centering */
+
+.app-wrapper {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  position: relative;
+}
+
+/* Desktop: centred column with simulated device border */
+@media (min-width: 600px) {
+  .app-wrapper {
+    border-left: 0.5px solid var(--color-border-strong);
+    border-right: 0.5px solid var(--color-border-strong);
+  }
+
+  /* Align settings dropdown to app-wrapper right edge */
+  .settings-dropdown {
+    right: calc(50% - 230px);
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .week-grid {
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ribbon {
+    gap: 2px;
+    padding: 0 8px;
+  }
+
+  .ribbon-separator {
+    margin: 0 1px;
+  }
+}

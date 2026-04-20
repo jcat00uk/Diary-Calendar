@@ -1,0 +1,110 @@
+/* Chronicle — CSS variables, reset, typography */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f6f3;
+  --bg-tertiary: #f0efe9;
+  --text-primary: #1a1a18;
+  --text-secondary: #6b6a66;
+  --text-tertiary: #a8a79f;
+  --color-border: rgba(0,0,0,0.12);
+  --color-border-strong: rgba(0,0,0,0.22);
+  --accent-blue-bg: #E6F1FB;
+  --accent-blue-text: #0C447C;
+  --accent-green-bg: #EAF3DE;
+  --accent-green-text: #27500A;
+  --accent-amber-bg: #FAEEDA;
+  --accent-amber-text: #633806;
+  --today-border: #378ADD;
+  --today-text: #185FA5;
+  --radius-card: 10px;
+  --radius-modal: 12px;
+  --radius-sm: 8px;
+  --ribbon-height: 52px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+body.dark {
+  --bg-primary: #1a1a18;
+  --bg-secondary: #242420;
+  --bg-tertiary: #2c2c28;
+  --text-primary: #f0efe9;
+  --text-secondary: #a8a79f;
+  --text-tertiary: #6b6a66;
+  --color-border: rgba(255,255,255,0.10);
+  --color-border-strong: rgba(255,255,255,0.20);
+}
+
+html {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg-tertiary);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+svg {
+  display: block;
+  fill: currentColor;
+}
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 80px);
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 9999;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100vw - 40px);
+}
+
+.toast.toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

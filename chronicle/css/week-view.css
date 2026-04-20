@@ -1,0 +1,103 @@
+/* Chronicle — Week view grid and edge navigation arrows */
+
+.week-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nav-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  border: 0.5px solid var(--color-border);
+  transition: background 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-arrow:active {
+  background: var(--bg-tertiary);
+}
+
+.nav-arrow--top,
+.nav-arrow--bottom {
+  height: 28px;
+  flex-direction: row;
+  padding: 0 12px;
+  border-left: none;
+  border-right: none;
+}
+
+.nav-arrow--top {
+  border-top: none;
+}
+
+.nav-arrow--bottom {
+  border-bottom: none;
+}
+
+.nav-arrow .icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.grid-with-sides {
+  display: flex;
+  flex: 1;
+}
+
+.nav-arrow--left,
+.nav-arrow--right {
+  width: 20px;
+  flex-direction: column;
+  padding: 10px 0;
+  border-top: none;
+  border-bottom: none;
+  overflow: hidden;
+}
+
+.nav-arrow--left {
+  border-left: none;
+}
+
+.nav-arrow--right {
+  border-right: none;
+}
+
+.nav-arrow--left .icon,
+.nav-arrow--right .icon {
+  width: 10px;
+  height: 10px;
+}
+
+.rotated-text {
+  font-size: 9px;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.02em;
+}
+
+.nav-arrow--left .rotated-text {
+  transform: rotate(180deg);
+}
+
+.week-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 7px;
+  align-content: start;
+  min-width: 0;
+}

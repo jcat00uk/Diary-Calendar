@@ -1,0 +1,228 @@
+/* Chronicle — Full-screen expanded day view overlay */
+
+.expanded-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100%;
+  max-width: 480px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  transform: translateX(-50%) translateY(100%);
+  transition: transform 0.3s ease;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+.expanded-overlay.open {
+  transform: translateX(-50%) translateY(0);
+}
+
+.expanded-header {
+  height: var(--ribbon-height);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.expanded-back {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 0;
+  white-space: nowrap;
+}
+
+.expanded-back .icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.expanded-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.expanded-add-btn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--today-text);
+  padding: 8px 0;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.expanded-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+.expanded-section {
+  border-bottom: 0.5px solid var(--color-border);
+}
+
+.expanded-section-header {
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.expanded-event-list {
+  padding: 0 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.expanded-event-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.expanded-event-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.expanded-event-dot--event   { background: var(--accent-blue-text); }
+.expanded-event-dot--todo    { background: var(--accent-green-text); }
+.expanded-event-dot--reminder { background: var(--accent-amber-text); }
+
+.expanded-event-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.expanded-event-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expanded-event-title.done {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.expanded-event-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.expanded-event-edit {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 8px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: var(--bg-primary);
+  transition: background 0.12s;
+}
+
+.expanded-event-edit:active {
+  background: var(--bg-tertiary);
+}
+
+.expanded-add-item {
+  padding: 10px 14px 12px;
+  font-size: 13px;
+  color: var(--today-text);
+  cursor: pointer;
+}
+
+.expanded-diary-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.expanded-diary-area {
+  flex: 1;
+  padding: 8px 14px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 22px;
+  outline: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 21px,
+    var(--color-border) 21px,
+    var(--color-border) 22px
+  );
+  background-position: 0 27px;
+  min-height: 200px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  cursor: text;
+}
+
+.expanded-diary-area:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  font-style: italic;
+  pointer-events: none;
+}
+
+.expanded-stubs {
+  padding: 10px 14px;
+  display: flex;
+  gap: 8px;
+  border-top: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.expanded-stub-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.expanded-stub-btn .icon {
+  width: 14px;
+  height: 14px;
+}
