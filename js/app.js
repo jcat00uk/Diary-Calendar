@@ -1309,7 +1309,6 @@ function openSettingsDropdown() {
       <div class="settings-row" style="cursor:default">
         <span class="settings-label" style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.06em">Coming soon</span>
       </div>
-      <div class="settings-row"><span class="settings-label">Full-text search</span><span class="badge-soon">Soon</span></div>
       <div class="settings-row"><span class="settings-label">Google Photos</span><span class="badge-soon">Soon</span></div>
       <div class="settings-row"><span class="settings-label">iCal export</span><span class="badge-soon">Soon</span></div>
     </div>

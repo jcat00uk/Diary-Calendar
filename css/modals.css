@@ -492,13 +492,13 @@ select.field-input {
 
 .search-result-snippet {
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .search-empty {
   padding: 24px;
   text-align: center;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .hidden {
