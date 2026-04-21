@@ -1,13 +1,14 @@
-/** Chronicle — Gesture detection (long press only) using touch events */
+/** Chronicle — Gesture detection (long press only) using touch + mouse events */
 
 export function initGestures(el, callbacks) {
+  const LONG_PRESS_MS  = 480;
+  const MOVE_CANCEL_PX = 12;
+
+  // ── Touch (mobile) ──────────────────────────────────────────────────────
   let startX = 0, startY = 0;
   let startTarget = null;
   let moved = false;
   let longPressTimer = null;
-
-  const LONG_PRESS_MS = 480;
-  const MOVE_CANCEL_PX = 12;
 
   el.addEventListener('touchstart', e => {
     if (e.target.closest('[contenteditable]')) return;
@@ -46,4 +47,37 @@ export function initGestures(el, callbacks) {
     clearTimeout(longPressTimer);
     startTarget = null;
   }, { passive: true });
+
+  // ── Mouse (desktop) ─────────────────────────────────────────────────────
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('[contenteditable]')) return;
+
+    const ox = e.clientX;
+    const oy = e.clientY;
+    const target = e.target;
+    let mouseTimer = null;
+
+    const onMove = ev => {
+      if (Math.abs(ev.clientX - ox) > MOVE_CANCEL_PX ||
+          Math.abs(ev.clientY - oy) > MOVE_CANCEL_PX) {
+        cancel();
+      }
+    };
+    const onUp = () => cancel();
+    const cancel = () => {
+      clearTimeout(mouseTimer);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+
+    mouseTimer = setTimeout(() => {
+      cancel();
+      const card = target.closest('.day-card');
+      if (card?.dataset.date) callbacks.onLongPress?.(card.dataset.date);
+    }, LONG_PRESS_MS);
+  });
 }

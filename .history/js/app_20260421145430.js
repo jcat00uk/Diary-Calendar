@@ -12,12 +12,9 @@ import {
   getEvents,
   addEvent,
   updateEvent,
-  updateSeries,
   deleteEvent,
-  toggleTodo,
-  getEventsForDate,
-  createRepeatRule,
-} from './events.js'
+  getEventsForDate
+} from './events.js';
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
 import { initGestures } from './gestures.js';
 import { pushUndo, undo, redo } from './undo.js';
@@ -86,18 +83,21 @@ let _suppressNextCardClick = false; // set after gesture long-press to eat the t
 function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
   let data;
-  if (raw) {
-    try { data = JSON.parse(raw); }
-    catch { data = buildDefaultData(); }
-  } else {
-    data = buildDefaultData();
-  }
-  if (!data.series) data.series = [];
-  return data;
-}
 
-function getSeriesForOccurrence(evt) {
-  return state.data.series.find(s => s.id === (evt.seriesId || evt.id)) || null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return buildDefaultData();
+    }
+  } else {
+    return buildDefaultData();
+  }
+
+  // MIGRATION: ensure series array exists
+  if (!data.series) data.series = [];
+
+  return data;
 }
 
 function buildDefaultData() {
@@ -110,79 +110,41 @@ function buildDefaultData() {
   const now = Date.now();
 
   return {
-  version: 1,
-  settings: {
-    weekStart:      'mon',
-    theme:          'light',
-    notifications:  true,
-    fyStartMonth:   3,
-    fyStartDay:     6,
-    agendaBeforeDays: 14,
-    agendaAheadDays:  60,
-    gdrive: { enabled: false, lastSync: null },
-  },
-
-  days: {
-    [todayKey]: {
-      diary: 'Morning run felt good. Clear skies.',
-      events: [
-        {
-          id: 'sample1',
-          type: 'event',
-          title: 'Team standup',
-          time: '09:00',
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: 15,
-          created: now,
-          modified: now
-        },
-        {
-          id: 'sample2',
-          type: 'todo',
-          title: 'Review PR #42',
-          time: null,
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: null,
-          created: now,
-          modified: now
-        }
-      ],
-      images: []
+    version: 1,
+    settings: {
+      weekStart:    'mon',
+      theme:        'light',
+      notifications: true,
+      fyStartMonth: 3,
+      fyStartDay:   6,
+      gdrive: { enabled: false, lastSync: null },
     },
-
-    [tomorrowKey]: {
-      diary: '',
-      events: [
-        {
-          id: 'sample3',
-          type: 'reminder',
-          title: 'Call dentist',
-          time: '10:00',
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: 30,
-          created: now,
-          modified: now
-        }
-      ],
-      images: []
-    },
-
-    [yesterdayKey]: {
-      diary: 'Finished the report. Feeling productive.',
-      events: [],
-      images: []
-    }
-  },
-
-  // ✅ The ONLY correct place for repeating events
-  series: []
-};
+    days: {
+      [todayKey]: {
+        diary: 'Morning run felt good. Clear skies.',
+        events: [
+          { id: 'sample1', type: 'event',    title: 'Team standup',  time: '09:00', done: false, repeat: null, notes: '', reminderMinutes: 15, created: now, modified: now },
+          { id: 'sample2', type: 'todo',     title: 'Review PR #42', time: null,    done: false, repeat: null, notes: '', reminderMinutes: null, created: now, modified: now },
+        ],
+        images: [],
+        series: [],   // <-- repeating events will live here
+      },
+      [tomorrowKey]: {
+        diary: '',
+        events: [
+          { id: 'sample3', type: 'reminder', title: 'Call dentist', time: '10:00', done: false, repeat: null, notes: '', reminderMinutes: 30, created: now, modified: now },
+        ],
+        images: [],
+      },
+      [yesterdayKey]: {
+        diary: 'Finished the report. Feeling productive.',
+        events: [],
+        images: [],
+      },
+      series: [],   // repeating events live here
+      
+     },
+  };
 }
 
 function saveData() {
@@ -389,11 +351,6 @@ function refreshCardEvents(dateKey) {
     : '');
 }
 
-/** Refresh all 7 day-card event strips currently rendered on screen */
-function refreshVisibleWeekCards() {
-  getDaysOfWeek(state.currentWeekStart).forEach(d => refreshCardEvents(formatDate(d)));
-}
-
 // ── Navigation ─────────────────────────────────────────────────────────────
 
 function goToWeek(date) {
@@ -410,7 +367,6 @@ function nextMonth()  { state.currentWeekStart = navigateMonth(state.currentWeek
 // ── Expanded day view ──────────────────────────────────────────────────────
 
 let _expandedOverlay = null;
-let _expandedDateKey  = null;
 
 function openExpandedDay(dateKey) {
   if (_expandedOverlay) closeExpandedDay();
@@ -463,7 +419,6 @@ function openExpandedDay(dateKey) {
 
   document.body.appendChild(overlay);
   _expandedOverlay = overlay;
-  _expandedDateKey  = dateKey;
 
   // Saved indicator
   const savedInd = overlay.querySelector('.diary-saved-indicator');
@@ -556,12 +511,9 @@ function renderExpandedEvents(overlay, dateKey) {
   list.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const evt = events.find(ev => ev.id === btn.dataset.edit);
-      if (!evt) return;
-      history.back();
-      if (evt.isOccurrence && evt.seriesId) {
-        setTimeout(() => openRepeatActionSheet(evt, dateKey, 'edit'), 350);
-      } else {
+      const evt = getEvents(state.data, dateKey).find(ev => ev.id === btn.dataset.edit);
+      if (evt) {
+        history.back();
         setTimeout(() => openAddEventModal(dateKey, evt), 350);
       }
     });
@@ -570,17 +522,11 @@ function renderExpandedEvents(overlay, dateKey) {
   list.querySelectorAll('[data-delete]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const evtToDel = events.find(ev => ev.id === btn.dataset.delete);
-      if (!evtToDel) return;
       pushUndo(JSON.parse(JSON.stringify(state.data)));
-      if (evtToDel.isOccurrence && evtToDel.seriesId) {
-        openRepeatActionSheet(evtToDel, dateKey, 'delete');
-      } else {
-        deleteEvent(state.data, dateKey, btn.dataset.delete);
-        saveData();
-        renderExpandedEvents(overlay, dateKey);
-        refreshVisibleWeekCards();
-      }
+      deleteEvent(state.data, dateKey, btn.dataset.delete);
+      saveData();
+      renderExpandedEvents(overlay, dateKey);
+      refreshCardEvents(dateKey);
     });
   });
 
@@ -591,7 +537,7 @@ function renderExpandedEvents(overlay, dateKey) {
       toggleTodo(state.data, dateKey, btn.dataset.check);
       saveData();
       renderExpandedEvents(overlay, dateKey);
-      refreshVisibleWeekCards();
+      refreshCardEvents(dateKey);
     });
   });
 }
@@ -601,7 +547,6 @@ function closeExpandedDay() {
   _expandedOverlay.classList.remove('open');
   const el = _expandedOverlay;
   _expandedOverlay = null;
-  _expandedDateKey  = null;
   setTimeout(() => el.remove(), 320);
 }
 
@@ -610,7 +555,7 @@ function closeExpandedDay() {
 let _addEventSheet    = null;
 let _addEventBackdrop = null;
 
-function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
+function openAddEventModal(dateKey, existing = null) {
   closeAddEventModal();
   history.pushState({ chronicle: 'modal', modal: 'addEvent' }, '');
 
@@ -637,48 +582,129 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
       <span class="sheet-title">${isEdit ? 'Edit' : 'New'} Entry</span>
       <button class="sheet-save" id="sheetSave">${STRINGS.save}</button>
     </div>
-
     <div class="sheet-body">
-
       <div class="field-group">
         <label class="field-label" for="evtTitle">Title</label>
-        <input class="field-input" id="evtTitle" type="text"
-               placeholder="Entry title" value="${esc(title)}">
+        <input class="field-input" id="evtTitle" type="text" inputmode="text"
+               placeholder="Entry title" value="${esc(title)}" autocomplete="off" autocorrect="on">
       </div>
-
       <div class="field-group">
         <label class="field-label">Type</label>
         <div class="segmented-control" id="typeControl">
-          <div class="seg-btn ${type === 'event' ? 'active' : ''}" data-type="event">Event</div>
-          <div class="seg-btn ${type === 'todo' ? 'active' : ''}" data-type="todo">Todo</div>
+          <div class="seg-btn ${type === 'event'    ? 'active' : ''}" data-type="event">Event</div>
+          <div class="seg-btn ${type === 'todo'     ? 'active' : ''}" data-type="todo">Todo</div>
           <div class="seg-btn ${type === 'reminder' ? 'active' : ''}" data-type="reminder">Reminder</div>
         </div>
       </div>
-
       <div class="field-group">
         <label class="field-label" for="evtDate">Date</label>
         <input class="field-input" id="evtDate" type="date" value="${esc(dateKey)}">
       </div>
-
       <div class="field-group">
         <label class="field-label" for="evtTime">Time (optional)</label>
         <input class="field-input" id="evtTime" type="time" value="${esc(time)}">
       </div>
-
       <div class="field-group" id="reminderGroup">
         <label class="field-label" for="evtReminder">Reminder</label>
         <select class="field-input" id="evtReminder">
           <option value="">None</option>
-          <option value="0" ${reminder === 0 ? 'selected' : ''}>At time of event</option>
-          <option value="5" ${reminder === 5 ? 'selected' : ''}>5 minutes before</option>
-          <option value="15" ${reminder === 15 ? 'selected' : ''}>15 minutes before</option>
-          <option value="30" ${reminder === 30 ? 'selected' : ''}>30 minutes before</option>
-          <option value="60" ${reminder === 60 ? 'selected' : ''}>1 hour before</option>
+          <option value="0"    ${reminder === 0    ? 'selected' : ''}>At time of event</option>
+          <option value="5"    ${reminder === 5    ? 'selected' : ''}>5 minutes before</option>
+          <option value="15"   ${reminder === 15   ? 'selected' : ''}>15 minutes before</option>
+          <option value="30"   ${reminder === 30   ? 'selected' : ''}>30 minutes before</option>
+          <option value="60"   ${reminder === 60   ? 'selected' : ''}>1 hour before</option>
           <option value="1440" ${reminder === 1440 ? 'selected' : ''}>1 day before</option>
         </select>
       </div>
-
       <!-- Repeat Frequency -->
+<div class="field-group">
+  <label class="field-label" for="evtRepeat">Repeat</label>
+  <select class="field-input" id="evtRepeat">
+    <option value="">None</option>
+    <option value="daily">Daily</option>
+    <option value="weekly">Weekly</option>
+    <option value="monthly">Monthly</option>
+    <option value="yearly">Yearly</option>
+  </select>
+</div>
+
+<!-- Interval -->
+<div class="field-group hidden" id="repeatIntervalGroup">
+  <label class="field-label" for="repeatInterval">Every</label>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <input class="field-input" id="repeatInterval" type="number" min="1" value="1" style="width:80px;">
+    <span id="repeatIntervalLabel">days</span>
+  </div>
+</div>
+
+<!-- Weekly weekday picker -->
+<div class="field-group hidden" id="repeatWeekdaysGroup">
+  <label class="field-label">On</label>
+  <div class="weekday-picker" id="repeatWeekdays">
+    <button type="button" data-day="1">Mon</button>
+    <button type="button" data-day="2">Tue</button>
+    <button type="button" data-day="3">Wed</button>
+    <button type="button" data-day="4">Thu</button>
+    <button type="button" data-day="5">Fri</button>
+    <button type="button" data-day="6">Sat</button>
+    <button type="button" data-day="0">Sun</button>
+  </div>
+</div>
+
+<!-- End conditions -->
+<div class="field-group hidden" id="repeatEndGroup">
+  <label class="field-label">Ends</label>
+  <div class="repeat-end-options">
+    <label><input type="radio" name="repeatEnd" value="never" checked> Never</label>
+    <label style="display:flex;align-items:center;gap:6px;">
+      <input type="radio" name="repeatEnd" value="after">
+      After
+      <input class="field-input" id="repeatEndCount" type="number" min="1" value="10" style="width:80px;">
+      occurrences
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;">
+      <input type="radio" name="repeatEnd" value="on">
+      On
+      <input class="field-input" id="repeatEndDate" type="date">
+    </label>
+  </div>
+</div>
+
+// Repeat UI elements
+const repeatSelect = sheet.querySelector('#evtRepeat');
+const intervalGroup = sheet.querySelector('#repeatIntervalGroup');
+const intervalInput = sheet.querySelector('#repeatInterval');
+const intervalLabel = sheet.querySelector('#repeatIntervalLabel');
+const weekdaysGroup = sheet.querySelector('#repeatWeekdaysGroup');
+const weekdaysButtons = sheet.querySelectorAll('#repeatWeekdays button');
+const endGroup = sheet.querySelector('#repeatEndGroup');
+const endRadios = sheet.querySelectorAll('input[name="repeatEnd"]');
+const endCount = sheet.querySelector('#repeatEndCount');
+const endDate = sheet.querySelector('#repeatEndDate');
+
+// Show/hide repeat UI
+repeatSelect.addEventListener('change', () => {
+  const freq = repeatSelect.value;
+
+  const show = freq !== '';
+  intervalGroup.classList.toggle('hidden', !show);
+  endGroup.classList.toggle('hidden', !show);
+  weekdaysGroup.classList.toggle('hidden', freq !== 'weekly');
+
+  if (freq === 'daily') intervalLabel.textContent = 'days';
+  if (freq === 'weekly') intervalLabel.textContent = 'weeks';
+  if (freq === 'monthly') intervalLabel.textContent = 'months';
+  if (freq === 'yearly') intervalLabel.textContent = 'years';
+});
+
+// Weekday picker toggle
+weekdaysButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+  });
+});
+
+
       <div class="field-group">
         <label class="field-label" for="evtRepeat">Repeat</label>
         <select class="field-input" id="evtRepeat">
@@ -687,57 +713,14 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
           <option value="weekly">Weekly</option>
           <option value="monthly">Monthly</option>
           <option value="yearly">Yearly</option>
+          <option value="custom" disabled>Custom (coming soon)</option>
         </select>
       </div>
-
-      <!-- Interval -->
-      <div class="field-group hidden" id="repeatIntervalGroup">
-        <label class="field-label" for="repeatInterval">Every</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="field-input" id="repeatInterval" type="number" min="1" value="1" style="width:80px;">
-          <span id="repeatIntervalLabel">days</span>
-        </div>
-      </div>
-
-      <!-- Weekly weekday picker -->
-      <div class="field-group hidden" id="repeatWeekdaysGroup">
-        <label class="field-label">On</label>
-        <div class="weekday-picker" id="repeatWeekdays">
-          <button type="button" data-day="1">Mon</button>
-          <button type="button" data-day="2">Tue</button>
-          <button type="button" data-day="3">Wed</button>
-          <button type="button" data-day="4">Thu</button>
-          <button type="button" data-day="5">Fri</button>
-          <button type="button" data-day="6">Sat</button>
-          <button type="button" data-day="0">Sun</button>
-        </div>
-      </div>
-
-      <!-- End conditions -->
-      <div class="field-group hidden" id="repeatEndGroup">
-        <label class="field-label">Ends</label>
-        <div class="repeat-end-options">
-          <label><input type="radio" name="repeatEnd" value="never" checked> Never</label>
-          <label style="display:flex;align-items:center;gap:6px;">
-            <input type="radio" name="repeatEnd" value="after">
-            After
-            <input class="field-input" id="repeatEndCount" type="number" min="1" value="10" style="width:80px;">
-            occurrences
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;">
-            <input type="radio" name="repeatEnd" value="on">
-            On
-            <input class="field-input" id="repeatEndDate" type="date">
-          </label>
-        </div>
-      </div>
-
       <div class="field-group">
         <label class="field-label" for="evtNotes">Notes (optional)</label>
         <textarea class="field-input field-textarea" id="evtNotes"
-                  placeholder="Additional notes…">${esc(notes)}</textarea>
+                  inputmode="text" placeholder="Additional notes…">${esc(notes)}</textarea>
       </div>
-
     </div>
   `;
 
@@ -746,54 +729,147 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   _addEventBackdrop = backdrop;
   _addEventSheet    = sheet;
 
-  // -----------------------------
-  // REPEAT UI JS (correct place)
-  // -----------------------------
+  let selectedType = type;
 
-  const repeatSelect = sheet.querySelector('#evtRepeat');
-  const intervalGroup = sheet.querySelector('#repeatIntervalGroup');
-  const intervalInput = sheet.querySelector('#repeatInterval');
-  const intervalLabel = sheet.querySelector('#repeatIntervalLabel');
-  const weekdaysGroup = sheet.querySelector('#repeatWeekdaysGroup');
-  const weekdaysButtons = sheet.querySelectorAll('#repeatWeekdays button');
-  const endGroup = sheet.querySelector('#repeatEndGroup');
-  const endRadios = sheet.querySelectorAll('input[name="repeatEnd"]');
-  const endCount = sheet.querySelector('#repeatEndCount');
-  const endDate = sheet.querySelector('#repeatEndDate');
+  const updateReminderVisibility = t => {
+    const rg = sheet.querySelector('#reminderGroup');
+    if (rg) rg.style.display = t === 'todo' ? 'none' : '';
+  };
+  updateReminderVisibility(selectedType);
 
-  repeatSelect.addEventListener('change', () => {
+  sheet.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedType = btn.dataset.type;
+      updateReminderVisibility(selectedType);
+      sheet.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  sheet.querySelector('#sheetCancel').addEventListener('click', () => history.back());
+
+  sheet.querySelector('#sheetSave').addEventListener('click', () => {
+    const titleVal    = sheet.querySelector('#evtTitle').value.trim();
+    if (!titleVal) { sheet.querySelector('#evtTitle').focus(); return; }
+
+    const dateVal     = sheet.querySelector('#evtDate').value  || dateKey;
+    const timeVal     = sheet.querySelector('#evtTime').value;
+    const notesVal    = sheet.querySelector('#evtNotes').value;
+    const reminderRaw = sheet.querySelector('#evtReminder').value;
+    const reminderVal = reminderRaw !== '' ? Number(reminderRaw) : null;
+
+    pushUndo(JSON.parse(JSON.stringify(state.data)));
+
+    if (isEdit) {
+      updateEvent(state.data, dateKey, existing.id, {
+        title: titleVal, type: selectedType,
+        time: timeVal || null, notes: notesVal,
+        reminderMinutes: reminderVal,
+      });
+    } else {
+    // Build repeat rule
+    let repeat = null;
     const freq = repeatSelect.value;
-    const show = freq !== '';
 
-    intervalGroup.classList.toggle('hidden', !show);
-    endGroup.classList.toggle('hidden', !show);
-    weekdaysGroup.classList.toggle('hidden', freq !== 'weekly');
+    if (freq !== '') {
+      const interval = Number(intervalInput.value);
 
-    intervalLabel.textContent =
-      freq === 'daily' ? 'days' :
-      freq === 'weekly' ? 'weeks' :
-      freq === 'monthly' ? 'months' :
-      'years';
-
-    // Auto-select the event's start date weekday when switching to weekly
-    // and no days are currently selected
-    if (freq === 'weekly') {
-      const anyActive = [...weekdaysButtons].some(b => b.classList.contains('active'));
-      if (!anyActive) {
-        const startWeekday = parseDate(sheet.querySelector('#evtDate').value || dateKey).getDay();
-        const btn = sheet.querySelector(`#repeatWeekdays button[data-day="${startWeekday}"]`);
-        if (btn) btn.classList.add('active');
+      let byWeekday = null;
+      if (freq === 'weekly') {
+        byWeekday = [...weekdaysButtons]
+          .filter(btn => btn.classList.contains('active'))
+          .map(btn => Number(btn.dataset.day));
       }
+
+      const endType = [...endRadios].find(r => r.checked).value;
+      let endCountVal = null;
+      let endDateVal = null;
+
+      if (endType === 'after') endCountVal = Number(endCount.value);
+      if (endType === 'on') endDateVal = endDate.value;
+
+      repeat = createRepeatRule(freq, interval, byWeekday, endType, endCountVal, endDateVal);
+    }
+
+    // Save event
+    if (isEdit) {
+      updateEvent(state.data, dateKey, existing.id, {
+        title: titleVal,
+        type: selectedType,
+        time: timeVal || null,
+        notes: notesVal,
+        reminderMinutes: reminderVal,
+        repeat
+      });
+    } else {
+      addEvent(state.data, dateVal, {
+        title: titleVal,
+        type: selectedType,
+        time: timeVal || null,
+        notes: notesVal,
+        reminderMinutes: reminderVal,
+        repeat
+      });
+    }
+    }
+
+    saveData();
+    refreshCardEvents(dateVal);
+    closeAddEventModal();
+  });
+
+  // Scroll focused inputs above the software keyboard
+  sheet.addEventListener('focusin', e => {
+    const t = e.target;
+    if (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') {
+      setTimeout(() => t.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300);
     }
   });
 
-  weekdaysButtons.forEach(btn => {
-    btn.addEventListener('click', () => btn.classList.toggle('active'));
-  });
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  setTimeout(() => sheet.querySelector('#evtTitle').focus(), 350);
+}
 
-  // -----------------------------
-  // PREFILL WHEN EDITING
-  // -----------------------------
+function closeAddEventModal() {
+  if (_addEventSheet) {
+    _addEventSheet.classList.remove('open');
+    const el = _addEventSheet;
+    _addEventSheet = null;
+    setTimeout(() => el.remove(), 320);
+  }
+  _addEventBackdrop?.remove();
+  _addEventBackdrop = null;
+}
+
+// ── Quick actions sheet ────────────────────────────────────────────────────
+
+let _qaSheet    = null;
+let _qaBackdrop = null;
+
+function openAddEventModal(dateKey, existing = null) {
+  closeAddEventModal();
+  history.pushState({ chronicle: 'modal', modal: 'addEvent' }, '');
+
+  const isEdit = !!existing;
+  const type   = existing?.type  ?? 'event';
+  const title  = existing?.title ?? '';
+  const time   = existing?.time  ?? '';
+  const notes  = existing?.notes ?? '';
+  const reminder = existing?.reminderMinutes ?? '';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  ...
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet';
+
+  sheet.innerHTML = ` ... your modal HTML ... `;
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(sheet);
+  _addEventBackdrop = backdrop;
+  _addEventSheet    = sheet;
+
+  // ⭐⭐⭐ INSERT THE REPEAT PREFILL BLOCK HERE ⭐⭐⭐
   if (existing?.repeat) {
     const r = existing.repeat;
 
@@ -821,313 +897,12 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
       endDate.value = r.end.date;
     }
   }
+  // ⭐⭐⭐ END OF INSERT ⭐⭐⭐
 
-  // -----------------------------
-  // SAVE HANDLER
-  // -----------------------------
-
-  let selectedType = type;
-
-  const updateReminderVisibility = t => {
-    const rg = sheet.querySelector('#reminderGroup');
-    if (rg) rg.style.display = t === 'todo' ? 'none' : '';
-  };
-  updateReminderVisibility(selectedType);
-
-  sheet.querySelectorAll('.seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      selectedType = btn.dataset.type;
-      updateReminderVisibility(selectedType);
-      sheet.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
-    });
-  });
-
-  sheet.querySelector('#sheetCancel').addEventListener('click', () => history.back());
-
+  // Now your save handler
   sheet.querySelector('#sheetSave').addEventListener('click', () => {
-    const titleVal = sheet.querySelector('#evtTitle').value.trim();
-    if (!titleVal) { sheet.querySelector('#evtTitle').focus(); return; }
-
-    const dateVal = sheet.querySelector('#evtDate').value || dateKey;
-    const timeVal = sheet.querySelector('#evtTime').value;
-    const notesVal = sheet.querySelector('#evtNotes').value;
-    const reminderRaw = sheet.querySelector('#evtReminder').value;
-    const reminderVal = reminderRaw !== '' ? Number(reminderRaw) : null;
-
-    pushUndo(JSON.parse(JSON.stringify(state.data)));
-
-    // Build repeat rule
-let repeat = null;
-const freq = repeatSelect.value.trim();
-
-// Only build a repeat rule if the user actually selected a frequency
-if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yearly') {
-  const interval = Number(intervalInput.value);
-
-  let byWeekday = null;
-  if (freq === 'weekly') {
-    byWeekday = [...weekdaysButtons]
-      .filter(btn => btn.classList.contains('active'))
-      .map(btn => Number(btn.dataset.day));
-  }
-
-  const endType = [...endRadios].find(r => r.checked).value;
-  let endCountVal = null;
-  let endDateVal = null;
-
-  if (endType === 'after') endCountVal = Number(endCount.value);
-  if (endType === 'on') endDateVal = endDate.value;
-
-  repeat = createRepeatRule(freq, interval, byWeekday, endType, endCountVal, endDateVal);
-}
-
-
-    if (isEdit && editMode === 'series') {
-      updateSeries(state.data, existing.id, {
-        title: titleVal,
-        type: selectedType,
-        time: timeVal || null,
-        notes: notesVal,
-        reminderMinutes: reminderVal,
-        repeat,
-      });
-    } else if (isEdit && editMode === 'exception') {
-      const exSeries = state.data.series.find(s => s.id === existing.seriesId);
-      if (exSeries) {
-        if (!exSeries.exceptions) exSeries.exceptions = {};
-        exSeries.exceptions[dateKey] = {
-          ...existing,
-          title: titleVal,
-          type: selectedType,
-          time: timeVal || null,
-          notes: notesVal,
-          reminderMinutes: reminderVal,
-          modified: Date.now(),
-        };
-      }
-    } else if (isEdit) {
-      updateEvent(state.data, dateKey, existing.id, {
-        title: titleVal,
-        type: selectedType,
-        time: timeVal || null,
-        notes: notesVal,
-        reminderMinutes: reminderVal,
-        repeat,
-      });
-    } else {
-      addEvent(state.data, dateVal, {
-        title: titleVal,
-        type: selectedType,
-        time: timeVal || null,
-        notes: notesVal,
-        reminderMinutes: reminderVal,
-        repeat,
-      });
-    }
-
-    saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
-    closeAddEventModal();
+    ...
   });
-
-  sheet.addEventListener('focusin', e => {
-    const t = e.target;
-    if (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') {
-      setTimeout(() => t.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300);
-    }
-  });
-
-  requestAnimationFrame(() => sheet.classList.add('open'));
-  setTimeout(() => sheet.querySelector('#evtTitle').focus(), 350);
-}
-
-
-function closeAddEventModal() {
-  if (_addEventSheet) {
-    _addEventSheet.classList.remove('open');
-    const el = _addEventSheet;
-    _addEventSheet = null;
-    setTimeout(() => el.remove(), 320);
-  }
-  _addEventBackdrop?.remove();
-  _addEventBackdrop = null;
-}
-
-function openRepeatActionSheet(evt, dateKey, mode) {
-  const sheet = document.createElement('div');
-  sheet.className = 'bottom-sheet';
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <span class="sheet-title">
-        ${mode === 'edit' ? 'Edit repeating event' : 'Delete repeating event'}
-      </span>
-      <button class="sheet-cancel">${STRINGS.cancel}</button>
-    </div>
-    <div class="sheet-body">
-      <div class="quick-action-item" data-action="single">
-        ${mode === 'edit' ? 'This event only' : 'Delete this event only'}
-      </div>
-      <div class="quick-action-item quick-action-item--destructive" data-action="series">
-        ${mode === 'edit' ? 'Entire series' : 'Delete entire series'}
-      </div>
-    </div>
-  `;
-  document.body.appendChild(sheet);
-
-  const close = () => {
-    sheet.classList.remove('open');
-    setTimeout(() => sheet.remove(), 200);
-  };
-
-  sheet.querySelector('.sheet-cancel').addEventListener('click', close);
-  sheet.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.dataset.action;
-      close();
-      if (mode === 'edit') handleRepeatEdit(evt, dateKey, action);
-      else handleRepeatDelete(evt, dateKey, action);
-    });
-  });
-
-  requestAnimationFrame(() => sheet.classList.add('open'));
-}
-
-function handleRepeatEdit(evt, dateKey, action) {
-  const series = getSeriesForOccurrence(evt);
-  if (!series) return;
-
-  if (action === "single") {
-    if (!series.exceptions) series.exceptions = {};
-    if (!series.exceptions[dateKey]) {
-      series.exceptions[dateKey] = {
-        ...evt,
-        isOccurrence: true,
-        seriesId: series.id,
-        date: dateKey,
-      };
-      saveData();
-    }
-    openAddEventModal(dateKey, series.exceptions[dateKey], "exception");
-    return;
-  }
-
-  if (action === "series") {
-    openAddEventModal(series.startDate, {
-      id: series.id,
-      type: series.type,
-      title: series.title,
-      time: series.time,
-      notes: series.notes,
-      reminderMinutes: series.reminderMinutes,
-      repeat: series.repeat,
-    }, "series");
-  }
-}
-
-function handleRepeatDelete(evt, dateKey, action) {
-  const series = getSeriesForOccurrence(evt);
-  if (!series) return;
-
-  if (action === "single") {
-    if (!series.exceptions) series.exceptions = {};
-    series.exceptions[dateKey] = null;
-    saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
-    return;
-  }
-
-  if (action === "series") {
-    state.data.series = state.data.series.filter(s => s.id !== series.id);
-    saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
-  }
-}
-
-
-// ── Quick actions sheet ────────────────────────────────────────────────────
-
-let _qaSheet    = null;
-let _qaBackdrop = null;
-
-function openQuickActions(dateKey) {
-  closeQuickActions();
-  history.pushState({ chronicle: 'modal', modal: 'qa' }, '');
-
-  const date  = parseDate(dateKey);
-  const label = date.toLocaleDateString('default', { weekday: 'long', day: 'numeric', month: 'short' });
-
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
-  backdrop.style.pointerEvents = 'none';
-  setTimeout(() => { backdrop.style.pointerEvents = ''; }, 350);
-  backdrop.addEventListener('click', () => history.back());
-
-  const sheet = document.createElement('div');
-  sheet.className = 'bottom-sheet';
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <span class="sheet-title">${esc(label)}</span>
-      <button class="sheet-cancel" id="qaCancel">${STRINGS.cancel}</button>
-    </div>
-    <div class="quick-actions">
-      <div class="quick-action-item" data-action="event" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-calendar"/></svg></div>
-        ${STRINGS.addEvent}
-      </div>
-      <div class="quick-action-item" data-action="todo" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-check"/></svg></div>
-        ${STRINGS.addTodo}
-      </div>
-      <div class="quick-action-item" data-action="reminder" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-bell"/></svg></div>
-        ${STRINGS.addReminder}
-      </div>
-      <div class="quick-action-item" data-action="expand" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-expand"/></svg></div>
-        ${STRINGS.expandDay}
-      </div>
-      <div class="quick-action-item" data-action="copy" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-copy"/></svg></div>
-        ${STRINGS.copyDay}
-      </div>
-      <div class="quick-action-item quick-action-item--destructive" data-action="clear" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-trash"/></svg></div>
-        ${STRINGS.clearDay}
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(backdrop);
-  document.body.appendChild(sheet);
-  _qaBackdrop = backdrop;
-  _qaSheet    = sheet;
-
-  
-
-  sheet.querySelector('#qaCancel').addEventListener('click', () => history.back());
-
-  sheet.querySelectorAll('.quick-action-item').forEach(item => {
-    const activate = () => {
-      const action = item.dataset.action;
-      closeQuickActions();
-      handleQuickAction(action, dateKey, date);
-    };
-    item.addEventListener('click', activate);
-    item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') activate(); });
-  });
-
-  requestAnimationFrame(() => sheet.classList.add('open'));
 }
 
 function handleQuickAction(action, dateKey, date) {
@@ -1194,8 +969,7 @@ function openSettingsDropdown() {
   if (_settingsDropdown) { closeSettingsDropdown(); return; }
   history.pushState({ chronicle: 'modal', modal: 'settings' }, '');
 
-  const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6,
-          agendaBeforeDays = 14, agendaAheadDays = 60 } = state.data.settings;
+  const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6 } = state.data.settings;
   const lastSyncStr = gdrive.lastSync
     ? STRINGS.lastSync.replace('{t}', new Date(gdrive.lastSync).toLocaleString())
     : STRINGS.neverSynced;
@@ -1240,34 +1014,6 @@ function openSettingsDropdown() {
           </select>
           <input id="settingsFyDay" type="number" min="1" max="31" value="${fyStartDay}"
                  style="width:42px;font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center">
-        </div>
-      </div>
-    </div>
-      <div class="settings-row" style="gap:6px">
-        <div>
-          <div class="settings-label">Agenda date range</div>
-          <div class="settings-sublabel">Recurring events shown in agenda</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-shrink:0">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <span style="font-size:10px;color:var(--text-tertiary)">Before</span>
-            <select id="settingsAgendaBefore" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-              <option value="0"  ${agendaBeforeDays === 0  ? 'selected' : ''}>None</option>
-              <option value="7"  ${agendaBeforeDays === 7  ? 'selected' : ''}>1 wk</option>
-              <option value="14" ${agendaBeforeDays === 14 ? 'selected' : ''}>2 wks</option>
-            </select>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <span style="font-size:10px;color:var(--text-tertiary)">After</span>
-            <select id="settingsAgendaAhead" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-              <option value="7"   ${agendaAheadDays === 7   ? 'selected' : ''}>1 wk</option>
-              <option value="14"  ${agendaAheadDays === 14  ? 'selected' : ''}>2 wks</option>
-              <option value="30"  ${agendaAheadDays === 30  ? 'selected' : ''}>1 mo</option>
-              <option value="60"  ${agendaAheadDays === 60  ? 'selected' : ''}>2 mo</option>
-              <option value="180" ${agendaAheadDays === 180 ? 'selected' : ''}>6 mo</option>
-              <option value="365" ${agendaAheadDays === 365 ? 'selected' : ''}>1 yr</option>
-            </select>
-          </div>
         </div>
       </div>
     </div>
@@ -1329,16 +1075,6 @@ function openSettingsDropdown() {
       renderWeekGrid();
       dropdown.querySelectorAll('[data-week]').forEach(b => b.classList.toggle('active', b === btn));
     });
-  });
-
-  dropdown.querySelector('#settingsAgendaBefore').addEventListener('change', e => {
-    state.data.settings.agendaBeforeDays = Number(e.target.value);
-    saveData();
-  });
-
-  dropdown.querySelector('#settingsAgendaAhead').addEventListener('change', e => {
-    state.data.settings.agendaAheadDays = Number(e.target.value);
-    saveData();
   });
 
   dropdown.querySelector('#settingsFyMonth').addEventListener('change', e => {
@@ -1481,81 +1217,77 @@ function renderAgendaList(filter) {
   const list = document.getElementById('agendaList');
   if (!list) return;
 
-  // Non-recurring events: every date stored in data.days
-  const dateSet = new Set(Object.keys(state.data.days));
-
-  // Recurring series: scan a window around today using the user's chosen range
-  if (state.data.series.length > 0) {
-    const beforeDays = state.data.settings.agendaBeforeDays ?? 14;
-    const aheadDays  = state.data.settings.agendaAheadDays  ?? 60;
-    const now = new Date(state.today);
-    const winStart = new Date(now); winStart.setDate(winStart.getDate() - beforeDays);
-    const winEnd   = new Date(now); winEnd.setDate(winEnd.getDate() + aheadDays);
-    let d = new Date(winStart);
-    while (d <= winEnd) {
-      dateSet.add(formatDate(d));
-      d.setDate(d.getDate() + 1);
-    }
-  }
-
   const items = [];
-  Array.from(dateSet).sort().forEach(dateKey => {
-    getEventsForDate(state.data, dateKey).forEach(evt => {
-      if (filter === 'all' || evt.type === filter) items.push({ dateKey, evt });
+  Object.entries(state.data.days)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([dateKey, day]) => {
+      (day.events ?? []).forEach(evt => {
+        if (filter === 'all' || evt.type === filter) items.push({ dateKey, evt });
+      });
     });
-  });
 
   if (items.length === 0) {
     list.innerHTML = `<div class="agenda-empty">No ${filter === 'all' ? '' : filter + ' '}entries yet.</div>`;
     return;
   }
 
-  const typeIcon = { event: 'icon-calendar', todo: 'icon-check', reminder: 'icon-bell' };
-
   list.innerHTML = items.map(({ dateKey, evt }) => {
-    const date     = parseDate(dateKey);
-    const dateStr  = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
+    const date    = parseDate(dateKey);
+    const dateStr = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
     const doneClass = evt.done ? 'agenda-item__title--done' : '';
-    const icon     = typeIcon[evt.type] ?? 'icon-calendar';
-    const todoBtn  = evt.type === 'todo'
-      ? `<button class="agenda-todo-check ${evt.done ? 'checked' : ''}"
-                 data-todo-toggle="${esc(evt.id)}"
-                 aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">${evt.done ? '✓' : ''}</button>`
-      : '';
     return `
       <div class="agenda-item" data-date="${esc(dateKey)}" data-id="${esc(evt.id)}">
-        <div class="agenda-item__icon agenda-item__icon--${esc(evt.type)}">
-          <svg class="icon"><use href="assets/icons.svg#${icon}"/></svg>
-        </div>
+        <div class="agenda-item__dot agenda-item__dot--${esc(evt.type)}"></div>
         <div class="agenda-item__body">
           <div class="agenda-item__title ${doneClass}">${esc(evt.title)}</div>
           <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}</div>
         </div>
-        ${todoBtn}
-        <svg class="icon agenda-item__chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>`;
   }).join('');
 
-  list.querySelectorAll('[data-todo-toggle]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const dateKey = btn.closest('.agenda-item').dataset.date;
-      pushUndo(JSON.parse(JSON.stringify(state.data)));
-      toggleTodo(state.data, dateKey, btn.dataset.todoToggle);
-      saveData();
-      refreshVisibleWeekCards();
-      renderAgendaList(_agendaFilter);
-    });
-  });
-
   list.querySelectorAll('.agenda-item').forEach(item => {
     item.addEventListener('click', () => {
-      const dateKey = item.dataset.date;
-      history.back();
-      setTimeout(() => {
+      const openDetail = list.querySelector('.agenda-item-detail');
+      const wasThis    = openDetail?.dataset.forId === item.dataset.id;
+      openDetail?.remove();
+      list.querySelectorAll('.agenda-item--active').forEach(i => i.classList.remove('agenda-item--active'));
+      if (wasThis) return;
+
+      item.classList.add('agenda-item--active');
+      const { date: dateKey, id: evtId } = item.dataset;
+      const evt = getEvents(state.data, dateKey).find(e => e.id === evtId);
+      if (!evt) return;
+
+      const detail = document.createElement('div');
+      detail.className = 'agenda-item-detail';
+      detail.dataset.forId = evtId;
+      detail.innerHTML = `
+        <div class="agenda-detail-title">${esc(evt.title)}</div>
+        ${evt.time  ? `<div class="agenda-detail-meta">${esc(evt.time)}</div>` : ''}
+        ${evt.notes ? `<div class="agenda-detail-meta">${esc(evt.notes)}</div>` : ''}
+        <div class="agenda-detail-actions">
+          <button class="agenda-detail-btn" data-action="goto">Go to day</button>
+          <button class="agenda-detail-btn" data-action="edit">Edit</button>
+          <button class="agenda-detail-btn agenda-detail-btn--danger" data-action="delete">Delete</button>
+        </div>
+      `;
+      item.insertAdjacentElement('afterend', detail);
+
+      detail.querySelector('[data-action="goto"]').addEventListener('click', () => {
+        closeAgendaPanel();
         goToWeek(parseDate(dateKey));
-        openExpandedDay(dateKey);
-      }, 320);
+      });
+      detail.querySelector('[data-action="edit"]').addEventListener('click', () => {
+        closeAgendaPanel();
+        openAddEventModal(dateKey, evt);
+      });
+      detail.querySelector('[data-action="delete"]').addEventListener('click', () => {
+        pushUndo(JSON.parse(JSON.stringify(state.data)));
+        deleteEvent(state.data, dateKey, evtId);
+        saveData();
+        refreshCardEvents(dateKey);
+        renderAgendaList(_agendaFilter);
+      });
     });
   });
 }
@@ -2007,7 +1739,7 @@ function init() {
     existing?.remove();
     if (wasThisPill) return;
 
-    const evt = getEventsForDate(state.data, dateKey).find(ev => ev.id === eventId);
+    const evt = getEvents(state.data, dateKey).find(ev => ev.id === eventId);
     if (!evt) return;
 
     pill.classList.add('event-pill--active');
@@ -2028,23 +1760,14 @@ function init() {
 
     detail.querySelector('.event-detail__edit').addEventListener('click', ev => {
       ev.stopPropagation();
-      if (evt.isOccurrence && evt.seriesId) {
-        openRepeatActionSheet(evt, dateKey, 'edit');
-      } else {
-        openAddEventModal(dateKey, evt);
-      }
+      openAddEventModal(dateKey, evt);
     });
-
     detail.querySelector('.event-detail__delete').addEventListener('click', ev => {
       ev.stopPropagation();
       pushUndo(JSON.parse(JSON.stringify(state.data)));
-      if (evt.isOccurrence && evt.seriesId) {
-        openRepeatActionSheet(evt, dateKey, 'delete');
-      } else {
-        deleteEvent(state.data, dateKey, evt.id);
-        saveData();
-        refreshVisibleWeekCards();
-      }
+      deleteEvent(state.data, dateKey, eventId);
+      saveData();
+      refreshCardEvents(dateKey);
     });
   });
 
@@ -2058,6 +1781,7 @@ function init() {
     if (_searchSheet)      { closeSearch();            return; }
     const agendaPanel = document.getElementById('agendaPanel');
     if (agendaPanel?.classList.contains('open')) { closeAgendaPanel(); return; }
+    // No overlay open — push a fresh main state so back never navigates away
     history.pushState({ chronicle: 'main' }, '');
   });
 
@@ -2066,6 +1790,7 @@ function init() {
     const onVVResize = () => {
       const offset = Math.max(0, window.innerHeight - window.visualViewport.height);
       document.documentElement.style.setProperty('--keyboard-offset', `${offset}px`);
+      // Shrink open bottom sheets so they stay above the keyboard
       document.querySelectorAll('.bottom-sheet.open').forEach(s => {
         s.style.maxHeight = offset > 0
           ? `${window.visualViewport.height}px`
@@ -2093,6 +1818,5 @@ function init() {
 
   scheduleNextDayRefresh();
 }
-
 
 document.addEventListener('DOMContentLoaded', init);

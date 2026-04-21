@@ -12,11 +12,10 @@ import {
   getEvents,
   addEvent,
   updateEvent,
-  updateSeries,
   deleteEvent,
-  toggleTodo,
   getEventsForDate,
-  createRepeatRule,
+  getAllDatesForSeries,
+  createRepeatRule   // ⭐ ADD THIS
 } from './events.js'
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
 import { initGestures } from './gestures.js';
@@ -87,11 +86,16 @@ function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
   let data;
   if (raw) {
-    try { data = JSON.parse(raw); }
-    catch { data = buildDefaultData(); }
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = buildDefaultData();
+    }
   } else {
-    data = buildDefaultData();
-  }
+  const data = buildDefaultData();
+  if (!data.series) data.series = [];
+  return data;
+}
   if (!data.series) data.series = [];
   return data;
 }
@@ -112,13 +116,11 @@ function buildDefaultData() {
   return {
   version: 1,
   settings: {
-    weekStart:      'mon',
-    theme:          'light',
-    notifications:  true,
-    fyStartMonth:   3,
-    fyStartDay:     6,
-    agendaBeforeDays: 14,
-    agendaAheadDays:  60,
+    weekStart:    'mon',
+    theme:        'light',
+    notifications: true,
+    fyStartMonth: 3,
+    fyStartDay:   6,
     gdrive: { enabled: false, lastSync: null },
   },
 
@@ -389,11 +391,6 @@ function refreshCardEvents(dateKey) {
     : '');
 }
 
-/** Refresh all 7 day-card event strips currently rendered on screen */
-function refreshVisibleWeekCards() {
-  getDaysOfWeek(state.currentWeekStart).forEach(d => refreshCardEvents(formatDate(d)));
-}
-
 // ── Navigation ─────────────────────────────────────────────────────────────
 
 function goToWeek(date) {
@@ -410,7 +407,6 @@ function nextMonth()  { state.currentWeekStart = navigateMonth(state.currentWeek
 // ── Expanded day view ──────────────────────────────────────────────────────
 
 let _expandedOverlay = null;
-let _expandedDateKey  = null;
 
 function openExpandedDay(dateKey) {
   if (_expandedOverlay) closeExpandedDay();
@@ -463,7 +459,6 @@ function openExpandedDay(dateKey) {
 
   document.body.appendChild(overlay);
   _expandedOverlay = overlay;
-  _expandedDateKey  = dateKey;
 
   // Saved indicator
   const savedInd = overlay.querySelector('.diary-saved-indicator');
@@ -557,11 +552,8 @@ function renderExpandedEvents(overlay, dateKey) {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const evt = events.find(ev => ev.id === btn.dataset.edit);
-      if (!evt) return;
-      history.back();
-      if (evt.isOccurrence && evt.seriesId) {
-        setTimeout(() => openRepeatActionSheet(evt, dateKey, 'edit'), 350);
-      } else {
+      if (evt) {
+        history.back();
         setTimeout(() => openAddEventModal(dateKey, evt), 350);
       }
     });
@@ -570,17 +562,13 @@ function renderExpandedEvents(overlay, dateKey) {
   list.querySelectorAll('[data-delete]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const evtToDel = events.find(ev => ev.id === btn.dataset.delete);
-      if (!evtToDel) return;
       pushUndo(JSON.parse(JSON.stringify(state.data)));
-      if (evtToDel.isOccurrence && evtToDel.seriesId) {
-        openRepeatActionSheet(evtToDel, dateKey, 'delete');
-      } else {
-        deleteEvent(state.data, dateKey, btn.dataset.delete);
-        saveData();
-        renderExpandedEvents(overlay, dateKey);
-        refreshVisibleWeekCards();
-      }
+      deleteEvent(state.data, dateKey, btn.dataset.delete);
+      saveData();
+      renderExpandedEvents(overlay, dateKey);
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
     });
   });
 
@@ -591,7 +579,9 @@ function renderExpandedEvents(overlay, dateKey) {
       toggleTodo(state.data, dateKey, btn.dataset.check);
       saveData();
       renderExpandedEvents(overlay, dateKey);
-      refreshVisibleWeekCards();
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
     });
   });
 }
@@ -601,7 +591,6 @@ function closeExpandedDay() {
   _expandedOverlay.classList.remove('open');
   const el = _expandedOverlay;
   _expandedOverlay = null;
-  _expandedDateKey  = null;
   setTimeout(() => el.remove(), 320);
 }
 
@@ -610,7 +599,7 @@ function closeExpandedDay() {
 let _addEventSheet    = null;
 let _addEventBackdrop = null;
 
-function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
+function openAddEventModal(dateKey, existing = null) {
   closeAddEventModal();
   history.pushState({ chronicle: 'modal', modal: 'addEvent' }, '');
 
@@ -774,17 +763,6 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
       freq === 'weekly' ? 'weeks' :
       freq === 'monthly' ? 'months' :
       'years';
-
-    // Auto-select the event's start date weekday when switching to weekly
-    // and no days are currently selected
-    if (freq === 'weekly') {
-      const anyActive = [...weekdaysButtons].some(b => b.classList.contains('active'));
-      if (!anyActive) {
-        const startWeekday = parseDate(sheet.querySelector('#evtDate').value || dateKey).getDay();
-        const btn = sheet.querySelector(`#repeatWeekdays button[data-day="${startWeekday}"]`);
-        if (btn) btn.classList.add('active');
-      }
-    }
   });
 
   weekdaysButtons.forEach(btn => {
@@ -882,37 +860,14 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
 }
 
 
-    if (isEdit && editMode === 'series') {
-      updateSeries(state.data, existing.id, {
-        title: titleVal,
-        type: selectedType,
-        time: timeVal || null,
-        notes: notesVal,
-        reminderMinutes: reminderVal,
-        repeat,
-      });
-    } else if (isEdit && editMode === 'exception') {
-      const exSeries = state.data.series.find(s => s.id === existing.seriesId);
-      if (exSeries) {
-        if (!exSeries.exceptions) exSeries.exceptions = {};
-        exSeries.exceptions[dateKey] = {
-          ...existing,
-          title: titleVal,
-          type: selectedType,
-          time: timeVal || null,
-          notes: notesVal,
-          reminderMinutes: reminderVal,
-          modified: Date.now(),
-        };
-      }
-    } else if (isEdit) {
+    if (isEdit) {
       updateEvent(state.data, dateKey, existing.id, {
         title: titleVal,
         type: selectedType,
         time: timeVal || null,
         notes: notesVal,
         reminderMinutes: reminderVal,
-        repeat,
+        repeat
       });
     } else {
       addEvent(state.data, dateVal, {
@@ -921,15 +876,12 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
         time: timeVal || null,
         notes: notesVal,
         reminderMinutes: reminderVal,
-        repeat,
+        repeat
       });
     }
 
     saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
+    refreshCardEvents(dateVal);
     closeAddEventModal();
   });
 
@@ -1000,22 +952,25 @@ function handleRepeatEdit(evt, dateKey, action) {
   const series = getSeriesForOccurrence(evt);
   if (!series) return;
 
-  if (action === "single") {
+  if (action === 'single') {
+    // Override this one occurrence
     if (!series.exceptions) series.exceptions = {};
-    if (!series.exceptions[dateKey]) {
-      series.exceptions[dateKey] = {
-        ...evt,
-        isOccurrence: true,
-        seriesId: series.id,
-        date: dateKey,
-      };
-      saveData();
-    }
-    openAddEventModal(dateKey, series.exceptions[dateKey], "exception");
+    series.exceptions[dateKey] = {
+      ...evt,
+      isOccurrence: true,
+      seriesId: series.id,
+      date: dateKey
+      // no repeat field here – it’s just an occurrence override
+    };
+    saveData();
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
     return;
   }
 
-  if (action === "series") {
+  if (action === 'series') {
+    // Edit the series master
     openAddEventModal(series.startDate, {
       id: series.id,
       type: series.type,
@@ -1023,8 +978,8 @@ function handleRepeatEdit(evt, dateKey, action) {
       time: series.time,
       notes: series.notes,
       reminderMinutes: series.reminderMinutes,
-      repeat: series.repeat,
-    }, "series");
+      repeat: series.repeat
+    });
   }
 }
 
@@ -1032,24 +987,24 @@ function handleRepeatDelete(evt, dateKey, action) {
   const series = getSeriesForOccurrence(evt);
   if (!series) return;
 
-  if (action === "single") {
+  if (action === 'single') {
+    // Mark this date as skipped
     if (!series.exceptions) series.exceptions = {};
     series.exceptions[dateKey] = null;
     saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
     return;
   }
 
-  if (action === "series") {
+  if (action === 'series') {
+    // Remove the entire series
     state.data.series = state.data.series.filter(s => s.id !== series.id);
     saveData();
-    refreshVisibleWeekCards();
-    if (_expandedOverlay && _expandedDateKey) {
-      renderExpandedEvents(_expandedOverlay, _expandedDateKey);
-    }
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
   }
 }
 
@@ -1194,8 +1149,7 @@ function openSettingsDropdown() {
   if (_settingsDropdown) { closeSettingsDropdown(); return; }
   history.pushState({ chronicle: 'modal', modal: 'settings' }, '');
 
-  const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6,
-          agendaBeforeDays = 14, agendaAheadDays = 60 } = state.data.settings;
+  const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6 } = state.data.settings;
   const lastSyncStr = gdrive.lastSync
     ? STRINGS.lastSync.replace('{t}', new Date(gdrive.lastSync).toLocaleString())
     : STRINGS.neverSynced;
@@ -1240,34 +1194,6 @@ function openSettingsDropdown() {
           </select>
           <input id="settingsFyDay" type="number" min="1" max="31" value="${fyStartDay}"
                  style="width:42px;font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center">
-        </div>
-      </div>
-    </div>
-      <div class="settings-row" style="gap:6px">
-        <div>
-          <div class="settings-label">Agenda date range</div>
-          <div class="settings-sublabel">Recurring events shown in agenda</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-shrink:0">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <span style="font-size:10px;color:var(--text-tertiary)">Before</span>
-            <select id="settingsAgendaBefore" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-              <option value="0"  ${agendaBeforeDays === 0  ? 'selected' : ''}>None</option>
-              <option value="7"  ${agendaBeforeDays === 7  ? 'selected' : ''}>1 wk</option>
-              <option value="14" ${agendaBeforeDays === 14 ? 'selected' : ''}>2 wks</option>
-            </select>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <span style="font-size:10px;color:var(--text-tertiary)">After</span>
-            <select id="settingsAgendaAhead" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-              <option value="7"   ${agendaAheadDays === 7   ? 'selected' : ''}>1 wk</option>
-              <option value="14"  ${agendaAheadDays === 14  ? 'selected' : ''}>2 wks</option>
-              <option value="30"  ${agendaAheadDays === 30  ? 'selected' : ''}>1 mo</option>
-              <option value="60"  ${agendaAheadDays === 60  ? 'selected' : ''}>2 mo</option>
-              <option value="180" ${agendaAheadDays === 180 ? 'selected' : ''}>6 mo</option>
-              <option value="365" ${agendaAheadDays === 365 ? 'selected' : ''}>1 yr</option>
-            </select>
-          </div>
         </div>
       </div>
     </div>
@@ -1329,16 +1255,6 @@ function openSettingsDropdown() {
       renderWeekGrid();
       dropdown.querySelectorAll('[data-week]').forEach(b => b.classList.toggle('active', b === btn));
     });
-  });
-
-  dropdown.querySelector('#settingsAgendaBefore').addEventListener('change', e => {
-    state.data.settings.agendaBeforeDays = Number(e.target.value);
-    saveData();
-  });
-
-  dropdown.querySelector('#settingsAgendaAhead').addEventListener('change', e => {
-    state.data.settings.agendaAheadDays = Number(e.target.value);
-    saveData();
   });
 
   dropdown.querySelector('#settingsFyMonth').addEventListener('change', e => {
@@ -1481,81 +1397,79 @@ function renderAgendaList(filter) {
   const list = document.getElementById('agendaList');
   if (!list) return;
 
-  // Non-recurring events: every date stored in data.days
-  const dateSet = new Set(Object.keys(state.data.days));
-
-  // Recurring series: scan a window around today using the user's chosen range
-  if (state.data.series.length > 0) {
-    const beforeDays = state.data.settings.agendaBeforeDays ?? 14;
-    const aheadDays  = state.data.settings.agendaAheadDays  ?? 60;
-    const now = new Date(state.today);
-    const winStart = new Date(now); winStart.setDate(winStart.getDate() - beforeDays);
-    const winEnd   = new Date(now); winEnd.setDate(winEnd.getDate() + aheadDays);
-    let d = new Date(winStart);
-    while (d <= winEnd) {
-      dateSet.add(formatDate(d));
-      d.setDate(d.getDate() + 1);
-    }
-  }
-
   const items = [];
-  Array.from(dateSet).sort().forEach(dateKey => {
-    getEventsForDate(state.data, dateKey).forEach(evt => {
-      if (filter === 'all' || evt.type === filter) items.push({ dateKey, evt });
+  Object.entries(state.data.days)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([dateKey, day]) => {
+      (day.events ?? []).forEach(evt => {
+        if (filter === 'all' || evt.type === filter) items.push({ dateKey, evt });
+      });
     });
-  });
 
   if (items.length === 0) {
     list.innerHTML = `<div class="agenda-empty">No ${filter === 'all' ? '' : filter + ' '}entries yet.</div>`;
     return;
   }
 
-  const typeIcon = { event: 'icon-calendar', todo: 'icon-check', reminder: 'icon-bell' };
-
   list.innerHTML = items.map(({ dateKey, evt }) => {
-    const date     = parseDate(dateKey);
-    const dateStr  = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
+    const date    = parseDate(dateKey);
+    const dateStr = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
     const doneClass = evt.done ? 'agenda-item__title--done' : '';
-    const icon     = typeIcon[evt.type] ?? 'icon-calendar';
-    const todoBtn  = evt.type === 'todo'
-      ? `<button class="agenda-todo-check ${evt.done ? 'checked' : ''}"
-                 data-todo-toggle="${esc(evt.id)}"
-                 aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">${evt.done ? '✓' : ''}</button>`
-      : '';
     return `
       <div class="agenda-item" data-date="${esc(dateKey)}" data-id="${esc(evt.id)}">
-        <div class="agenda-item__icon agenda-item__icon--${esc(evt.type)}">
-          <svg class="icon"><use href="assets/icons.svg#${icon}"/></svg>
-        </div>
+        <div class="agenda-item__dot agenda-item__dot--${esc(evt.type)}"></div>
         <div class="agenda-item__body">
           <div class="agenda-item__title ${doneClass}">${esc(evt.title)}</div>
           <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}</div>
         </div>
-        ${todoBtn}
-        <svg class="icon agenda-item__chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>`;
   }).join('');
 
-  list.querySelectorAll('[data-todo-toggle]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const dateKey = btn.closest('.agenda-item').dataset.date;
-      pushUndo(JSON.parse(JSON.stringify(state.data)));
-      toggleTodo(state.data, dateKey, btn.dataset.todoToggle);
-      saveData();
-      refreshVisibleWeekCards();
-      renderAgendaList(_agendaFilter);
-    });
-  });
-
   list.querySelectorAll('.agenda-item').forEach(item => {
     item.addEventListener('click', () => {
-      const dateKey = item.dataset.date;
-      history.back();
-      setTimeout(() => {
+      const openDetail = list.querySelector('.agenda-item-detail');
+      const wasThis    = openDetail?.dataset.forId === item.dataset.id;
+      openDetail?.remove();
+      list.querySelectorAll('.agenda-item--active').forEach(i => i.classList.remove('agenda-item--active'));
+      if (wasThis) return;
+
+      item.classList.add('agenda-item--active');
+      const { date: dateKey, id: evtId } = item.dataset;
+      const evt = getEventsForDate(state.data, dateKey).find(e => e.id === evtId);
+      if (!evt) return;
+
+      const detail = document.createElement('div');
+      detail.className = 'agenda-item-detail';
+      detail.dataset.forId = evtId;
+      detail.innerHTML = `
+        <div class="agenda-detail-title">${esc(evt.title)}</div>
+        ${evt.time  ? `<div class="agenda-detail-meta">${esc(evt.time)}</div>` : ''}
+        ${evt.notes ? `<div class="agenda-detail-meta">${esc(evt.notes)}</div>` : ''}
+        <div class="agenda-detail-actions">
+          <button class="agenda-detail-btn" data-action="goto">Go to day</button>
+          <button class="agenda-detail-btn" data-action="edit">Edit</button>
+          <button class="agenda-detail-btn agenda-detail-btn--danger" data-action="delete">Delete</button>
+        </div>
+      `;
+      item.insertAdjacentElement('afterend', detail);
+
+      detail.querySelector('[data-action="goto"]').addEventListener('click', () => {
+        closeAgendaPanel();
         goToWeek(parseDate(dateKey));
-        openExpandedDay(dateKey);
-      }, 320);
+      });
+      detail.querySelector('[data-action="edit"]').addEventListener('click', () => {
+        closeAgendaPanel();
+        openAddEventModal(dateKey, evt);
+      });
+      detail.querySelector('[data-action="delete"]').addEventListener('click', () => {
+        pushUndo(JSON.parse(JSON.stringify(state.data)));
+        deleteEvent(state.data, dateKey, evtId);
+        saveData();
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
+        renderAgendaList(_agendaFilter);
+      });
     });
   });
 }
@@ -2041,9 +1955,11 @@ function init() {
       if (evt.isOccurrence && evt.seriesId) {
         openRepeatActionSheet(evt, dateKey, 'delete');
       } else {
-        deleteEvent(state.data, dateKey, evt.id);
+        deleteEventOccurrenceOrSeries(evt, dateKey);
         saveData();
-        refreshVisibleWeekCards();
+      const seriesId = evt.seriesId || evt.id;
+      const dates = getAllDatesForSeries(state.data, seriesId);
+      dates.forEach(d => refreshCardEvents(d));
       }
     });
   });

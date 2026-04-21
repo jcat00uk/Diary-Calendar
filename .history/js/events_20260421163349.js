@@ -64,32 +64,13 @@ export function deleteEvent(data, dateKey, eventId) {
   data.days[dateKey].events = data.days[dateKey].events.filter(e => e.id !== eventId);
 }
 
-/** Toggle the done state of a todo (handles both regular events and series occurrences) */
+/** Toggle the done state of a todo */
 export function toggleTodo(data, dateKey, eventId) {
-  // Regular event stored in data.days
   const evt = data.days[dateKey]?.events?.find(e => e.id === eventId);
   if (evt && evt.type === 'todo') {
     evt.done = !evt.done;
     evt.modified = Date.now();
-    return;
   }
-  // Series occurrence (id = seriesId + ':' + dateKey)
-  const colonIdx = eventId.indexOf(':');
-  if (colonIdx === -1) return;
-  const seriesId = eventId.substring(0, colonIdx);
-  const series = data.series?.find(s => s.id === seriesId);
-  if (!series || series.type !== 'todo') return;
-  if (!series.exceptions) series.exceptions = {};
-  if (!series.exceptions[dateKey]) {
-    series.exceptions[dateKey] = {
-      id: eventId, seriesId,
-      type: series.type, title: series.title,
-      time: series.time, notes: series.notes,
-      reminderMinutes: series.reminderMinutes,
-      date: dateKey, isOccurrence: true, done: false,
-    };
-  }
-  series.exceptions[dateKey].done = !series.exceptions[dateKey].done;
 }
 
 export function createRepeatRule(freq, interval = 1, byWeekday = null, endType = 'never', endCount = null, endDate = null) {
@@ -170,7 +151,44 @@ function addYears(date, n) {
   return d;
 }
 
+export function generateOccurrencesForSeries(data, series, dateKey) {
+  const start = parseDate(series.startDate);
+  const target = parseDate(dateKey);
 
+  // Too early
+  if (target < start) return null;
+
+  const rule = series.repeat;
+
+  // End by date
+  if (rule.end.type === 'on' && dateKey > rule.end.date) return null;
+
+  // End after N occurrences
+  if (rule.end.type === 'after') {
+    const count = countOccurrencesBefore(data, series, dateKey);
+    if (count >= rule.end.count) return null;
+  }
+
+  // Exceptions
+  if (series.exceptions[dateKey] === null) return null; // skipped
+  if (series.exceptions[dateKey]) return series.exceptions[dateKey]; // modified
+
+  switch (rule.freq) {
+    case 'daily':
+      return occursDaily(series, start, target, rule, dateKey);
+
+    case 'weekly':
+      return occursWeekly(series, start, target, rule, dateKey);
+
+    case 'monthly':
+      return occursMonthly(series, start, target, rule, dateKey);
+
+    case 'yearly':
+      return occursYearly(series, start, target, rule, dateKey);
+  }
+
+  return null;
+}
 
 
 function occursDaily(series, start, target, rule, dateKey) {
@@ -180,20 +198,11 @@ function occursDaily(series, start, target, rule, dateKey) {
   return buildOccurrence(series, dateKey);
 }
 
-function weekMonday(d) {
-  const r = new Date(d);
-  r.setDate(r.getDate() - ((r.getDay() + 6) % 7));
-  return r;
-}
-
 function occursWeekly(series, start, target, rule, dateKey) {
-  // Anchor on the Monday of the start week so Mon+Wed in the same calendar
-  // week are both in "week 0", regardless of which day the series started on.
-  const startMon  = weekMonday(start);
-  const targetMon = weekMonday(target);
-  const weekDiff  = Math.round((targetMon - startMon) / 604800000);
+  const diff = Math.floor((target - start) / 86400000);
+  const weeks = Math.floor(diff / 7);
 
-  if (weekDiff < 0 || weekDiff % rule.interval !== 0) return null;
+  if (weeks % rule.interval !== 0) return null;
 
   const weekday = target.getDay();
   if (!rule.byWeekday.includes(weekday)) return null;
@@ -228,7 +237,7 @@ function occursYearly(series, start, target, rule, dateKey) {
 
 function buildOccurrence(series, dateKey) {
   return {
-    id: series.id + ':' + dateKey,   // unique per occurrence
+    id: series.id,               // same ID as series
     seriesId: series.id,
     type: series.type,
     title: series.title,
@@ -241,73 +250,9 @@ function buildOccurrence(series, dateKey) {
 }
 
 function parseDate(dateStr) {
+  // Expects YYYY-MM-DD
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-function formatDateObj(d) {
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-/** Return 0-based occurrence index for the target date within the series */
-function getOccurrenceIndex(start, target, rule) {
-  if (rule.freq === 'daily') {
-    const diff = Math.round((target - start) / 86400000);
-    return Math.round(diff / rule.interval);
-  }
-  if (rule.freq === 'monthly') {
-    const months = (target.getFullYear() - start.getFullYear()) * 12
-                 + (target.getMonth() - start.getMonth());
-    return Math.round(months / rule.interval);
-  }
-  if (rule.freq === 'yearly') {
-    return Math.round((target.getFullYear() - start.getFullYear()) / rule.interval);
-  }
-  // weekly: iterate day-by-day from start, using same Monday-anchor as occursWeekly
-  const startMon = weekMonday(start);
-  let count = 0;
-  let d = new Date(start);
-  while (d < target) {
-    const weekDiff = Math.round((weekMonday(d) - startMon) / 604800000);
-    if (weekDiff % rule.interval === 0 && rule.byWeekday.includes(d.getDay())) count++;
-    d = addDays(d, 1);
-  }
-  return count;
-}
-
-export function generateOccurrencesForSeries(series, dateKey) {
-  const start = parseDate(series.startDate);
-  const target = parseDate(dateKey);
-
-  if (target < start) return null;
-
-  const rule = series.repeat;
-  if (!rule) return null;
-
-  if (rule.end?.type === 'on' && dateKey > rule.end.date) return null;
-
-  const exceptions = series.exceptions || {};
-  if (exceptions[dateKey] === null) return null;
-  if (exceptions[dateKey]) return exceptions[dateKey];
-
-  let result = null;
-  switch (rule.freq) {
-    case 'daily':   result = occursDaily(series, start, target, rule, dateKey);   break;
-    case 'weekly':  result = occursWeekly(series, start, target, rule, dateKey);  break;
-    case 'monthly': result = occursMonthly(series, start, target, rule, dateKey); break;
-    case 'yearly':  result = occursYearly(series, start, target, rule, dateKey);  break;
-  }
-
-  if (!result) return null;
-
-  if (rule.end?.type === 'after') {
-    const idx = getOccurrenceIndex(start, target, rule);
-    if (idx >= rule.end.count) return null;
-  }
-
-  return result;
 }
 
 export function getEventsForDate(data, dateKey) {
@@ -319,6 +264,7 @@ export function getEventsForDate(data, dateKey) {
 
   const all = [...normal, ...repeats];
 
+  // Sort by time
   all.sort((a, b) => {
     if (!a.time && !b.time) return 0;
     if (!a.time) return 1;
@@ -329,13 +275,24 @@ export function getEventsForDate(data, dateKey) {
   return all;
 }
 
-
-
-export function updateSeries(data, seriesId, updates) {
-  const idx = data.series.findIndex(s => s.id === seriesId);
-  if (idx === -1) return null;
-  data.series[idx] = { ...data.series[idx], ...updates, modified: Date.now() };
-  return data.series[idx];
+export function getAllDatesForSeries(data, seriesId){
+  const dates = [];
+  for (const dateKey in state.data.days) {
+    const events = getEventsForDate(state.data, dateKey);
+    if (events.some(ev => ev.seriesId === seriesId)) {
+      dates.push(dateKey);
+    }
+  }
+  return dates;
 }
 
-
+function countOccurrencesBefore(series, targetKey) {
+  let count = 0;
+  for (const dateKey in state.data.days) {
+    if (dateKey >= targetKey) continue;
+    if (generateOccurrencesForSeries(series, dateKey)) {
+      count++;
+    }
+  }
+  return count;
+}
