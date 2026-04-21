@@ -447,16 +447,14 @@ select.field-input {
 
 
 .search-body {
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .search-results {
-  flex: 1;       /* <-- REQUIRED */
+  max-height: 60vh;
   overflow-y: auto;
-  min-height: 0; /* <-- CRITICAL for Android */
-  padding-bottom: 40px;
 }
 
 .search-result-item {
@@ -479,8 +477,8 @@ select.field-input {
 }
 
 .search-empty {
-  padding: 24px;
   text-align: center;
+  padding: 24px 0;
   color: var(--text-muted);
 }
 
@@ -493,29 +491,4 @@ select.field-input {
   margin-top: 16px;
   margin-bottom: 8px;
   padding: 0 4px;
-}
-
-
-/* MOBILE KEYBOARD FIX — only apply on small screens */
-@media (max-width: 600px) {
-  .search-body {
-    position: relative;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .search-input-row {
-    padding-bottom: 8px;
-  }
-
-  .search-results-wrapper {
-    position: absolute;
-    top: 48px; /* height of input row */
-    left: 0;
-    right: 0;
-    bottom: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background: var(--bg-primary);
-  }
 }

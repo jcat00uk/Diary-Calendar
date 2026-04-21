@@ -1259,18 +1259,14 @@ function openSearch() {
       <span></span>
     </div>
 
-<div class="sheet-body search-body">
-  <div class="search-input-row">
-    <input class="field-input" type="search" inputmode="text"
-           placeholder="${STRINGS.searchPlaceholder}"
-           id="searchInput" autocomplete="off">
-  </div>
+    <div class="sheet-body search-body">
+      <input class="field-input" type="search" inputmode="text"
+             placeholder="${STRINGS.searchPlaceholder}"
+             id="searchInput" autocomplete="off">
 
-  <div class="search-results-wrapper">
-    <div id="searchResults" class="search-results"></div>
-    <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
-  </div>
-</div>
+      <div id="searchResults" class="search-results"></div>
+      <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
+    </div>
   `;
 
   sheet.querySelector('#searchClose').addEventListener('click', () => history.back());

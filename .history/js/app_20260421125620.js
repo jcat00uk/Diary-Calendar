@@ -41,8 +41,6 @@ const STRINGS = {
   exportDone:       'Data exported',
   importDone:       'Data imported',
   searchPlaceholder:'Search diary and events…',
-  search:           'Search',
-  searchEmpty:      'No results found.',
   lastSync:         'Last sync: {t}',
   neverSynced:      'Never synced',
   confirmClearDay:  'Clear all entries for this day?',
@@ -1259,18 +1257,14 @@ function openSearch() {
       <span></span>
     </div>
 
-<div class="sheet-body search-body">
-  <div class="search-input-row">
-    <input class="field-input" type="search" inputmode="text"
-           placeholder="${STRINGS.searchPlaceholder}"
-           id="searchInput" autocomplete="off">
-  </div>
+    <div class="sheet-body search-body">
+      <input class="field-input" type="search" inputmode="text"
+             placeholder="${STRINGS.searchPlaceholder}"
+             id="searchInput" autocomplete="off">
 
-  <div class="search-results-wrapper">
-    <div id="searchResults" class="search-results"></div>
-    <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
-  </div>
-</div>
+      <div id="searchResults" class="search-results"></div>
+      <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
+    </div>
   `;
 
   sheet.querySelector('#searchClose').addEventListener('click', () => history.back());
@@ -1300,188 +1294,11 @@ function openSearch() {
   });
 
   setTimeout(() => inputEl.focus(), 350);
-
-// Keyboard-aware adjustment for Android
-const vv = window.visualViewport;
-if (vv) {
-  const adjustForKeyboard = () => {
-    const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
-    sheet.style.bottom = keyboardHeight > 0 ? `${keyboardHeight}px` : '0';
-  };
-
-  vv.addEventListener('resize', adjustForKeyboard);
-  vv.addEventListener('scroll', adjustForKeyboard); // important on Android
-  adjustForKeyboard();
-
-  sheet._cleanupVV = () => {
-    vv.removeEventListener('resize', adjustForKeyboard);
-    vv.removeEventListener('scroll', adjustForKeyboard);
-  };
-}
-
-}
-
-function runSearch(query, resultsEl, emptyEl) {
-  const results = searchAll(query);
-
-  if (results.length === 0) {
-    resultsEl.innerHTML = '';
-    emptyEl.classList.remove('hidden');
-    return;
-  }
-
-  emptyEl.classList.add('hidden');
-  resultsEl.innerHTML = renderSearchResultsGrouped(results);
-
-  // ANDROID KEYBOARD BUG FIX — FORCE REPAINT
-  resultsEl.style.display = 'none';
-  void resultsEl.offsetHeight;
-  resultsEl.style.display = '';
-
-}
-
-function searchAll(query) {
-  const q = query.toLowerCase();
-  const out = [];
-
-  for (const dateKey in state.data.days) {
-    const day = state.data.days[dateKey];
-    if (!day) continue;
-
-    // Diary
-    if (day.diary) {
-      const plain = stripHTML(day.diary).toLowerCase();
-      const idx = plain.indexOf(q);
-      if (idx !== -1) {
-        out.push({
-          dateKey,
-          type: 'diary',
-          snippet: makeSnippet(stripHTML(day.diary), q),
-          eventId: null
-        });
-      }
-    }
-
-    // Events / todos / reminders
-    if (day.events) {
-      for (const ev of day.events) {
-        const hay = (ev.title + ' ' + (ev.notes || '')).toLowerCase();
-        if (hay.includes(q)) {
-          out.push({
-            dateKey,
-            type: ev.type, // event | todo | reminder
-            snippet: makeSnippet(ev.title + ' ' + (ev.notes || ''), q),
-            eventId: ev.id
-          });
-        }
-      }
-    }
-  }
-
-  // Sort by date ascending
-  out.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-
-  return out;
-}
-
-function stripHTML(html) {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  return tmp.textContent || '';
-}
-
-function makeSnippet(text, qLower) {
-  const lower = text.toLowerCase();
-  const idx = lower.indexOf(qLower);
-  if (idx === -1) return esc(text);
-
-  const start = Math.max(0, idx - 30);
-  const end   = Math.min(text.length, idx + qLower.length + 30);
-  const raw   = text.slice(start, end);
-
-  const escRaw = esc(raw);
-  const re = new RegExp(`(${qLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
-
-  return escRaw.replace(re, '<mark>$1</mark>');
-}
-
-function renderSearchResultsGrouped(results) {
-  let html = '';
-  let currentDate = null;
-
-  for (const r of results) {
-    if (r.dateKey !== currentDate) {
-      currentDate = r.dateKey;
-      html += `
-        <div class="search-date-header">
-          ${formatSearchDate(currentDate)}
-        </div>
-      `;
-    }
-
-    html += `
-      <div class="search-result-item"
-           data-date="${r.dateKey}"
-           data-eventid="${r.eventId || ''}">
-        <div class="search-result-title">${formatType(r.type)}</div>
-        <div class="search-result-snippet">${r.snippet}</div>
-      </div>
-    `;
-  }
-
-  // Attach click handlers after insertion
-  requestAnimationFrame(() => {
-    document.querySelectorAll('.search-result-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const dateKey = el.dataset.date;
-        navigateToSearchResult(dateKey);
-      });
-    });
-  });
-
-  return html;
-}
-
-function formatSearchDate(dateKey) {
-  const d = parseDate(dateKey);
-  return d.toLocaleDateString('default', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short'
-  });
-}
-
-function formatType(t) {
-  switch (t) {
-    case 'event':    return 'Event';
-    case 'todo':     return 'Todo';
-    case 'reminder': return 'Reminder';
-    case 'diary':    return 'Diary';
-    default:         return t;
-  }
-}
-
-function navigateToSearchResult(dateKey) {
-  // Close search modal first
-  history.back();
-
-  // Wait for sheet to close animation
-  setTimeout(() => {
-    const date = parseDate(dateKey);
-    state.currentWeekStart = getWeekStart(date, state.data.settings.weekStart);
-
-    renderWeekGrid();
-    openExpandedDay(dateKey);
-  }, 350);
 }
 
 
 function closeSearch() {
   if (_searchSheet) {
-    if (typeof _searchSheet._cleanupVV === 'function') {
-      _searchSheet._cleanupVV();
-    }
-
     _searchSheet.classList.remove('open');
     const el = _searchSheet;
     _searchSheet = null;
@@ -1490,7 +1307,6 @@ function closeSearch() {
   _searchBackdrop?.remove();
   _searchBackdrop = null;
 }
-
 
 // ── Undo / redo ────────────────────────────────────────────────────────────
 

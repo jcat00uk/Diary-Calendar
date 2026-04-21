@@ -1270,8 +1270,6 @@ function openSearch() {
     <div id="searchResults" class="search-results"></div>
     <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
   </div>
-</div>
-  `;
 
   sheet.querySelector('#searchClose').addEventListener('click', () => history.back());
 

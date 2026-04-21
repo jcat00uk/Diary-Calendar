@@ -1259,18 +1259,14 @@ function openSearch() {
       <span></span>
     </div>
 
-<div class="sheet-body search-body">
-  <div class="search-input-row">
-    <input class="field-input" type="search" inputmode="text"
-           placeholder="${STRINGS.searchPlaceholder}"
-           id="searchInput" autocomplete="off">
-  </div>
+    <div class="sheet-body search-body">
+      <input class="field-input" type="search" inputmode="text"
+             placeholder="${STRINGS.searchPlaceholder}"
+             id="searchInput" autocomplete="off">
 
-  <div class="search-results-wrapper">
-    <div id="searchResults" class="search-results"></div>
-    <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
-  </div>
-</div>
+      <div id="searchResults" class="search-results"></div>
+      <div id="searchEmpty" class="search-empty hidden">${STRINGS.searchEmpty}</div>
+    </div>
   `;
 
   sheet.querySelector('#searchClose').addEventListener('click', () => history.back());
@@ -1300,25 +1296,6 @@ function openSearch() {
   });
 
   setTimeout(() => inputEl.focus(), 350);
-
-// Keyboard-aware adjustment for Android
-const vv = window.visualViewport;
-if (vv) {
-  const adjustForKeyboard = () => {
-    const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
-    sheet.style.bottom = keyboardHeight > 0 ? `${keyboardHeight}px` : '0';
-  };
-
-  vv.addEventListener('resize', adjustForKeyboard);
-  vv.addEventListener('scroll', adjustForKeyboard); // important on Android
-  adjustForKeyboard();
-
-  sheet._cleanupVV = () => {
-    vv.removeEventListener('resize', adjustForKeyboard);
-    vv.removeEventListener('scroll', adjustForKeyboard);
-  };
-}
-
 }
 
 function runSearch(query, resultsEl, emptyEl) {
@@ -1332,12 +1309,6 @@ function runSearch(query, resultsEl, emptyEl) {
 
   emptyEl.classList.add('hidden');
   resultsEl.innerHTML = renderSearchResultsGrouped(results);
-
-  // ANDROID KEYBOARD BUG FIX — FORCE REPAINT
-  resultsEl.style.display = 'none';
-  void resultsEl.offsetHeight;
-  resultsEl.style.display = '';
-
 }
 
 function searchAll(query) {
@@ -1478,10 +1449,6 @@ function navigateToSearchResult(dateKey) {
 
 function closeSearch() {
   if (_searchSheet) {
-    if (typeof _searchSheet._cleanupVV === 'function') {
-      _searchSheet._cleanupVV();
-    }
-
     _searchSheet.classList.remove('open');
     const el = _searchSheet;
     _searchSheet = null;
@@ -1490,7 +1457,6 @@ function closeSearch() {
   _searchBackdrop?.remove();
   _searchBackdrop = null;
 }
-
 
 // ── Undo / redo ────────────────────────────────────────────────────────────
 

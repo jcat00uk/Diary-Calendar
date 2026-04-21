@@ -495,27 +495,17 @@ select.field-input {
   padding: 0 4px;
 }
 
+.search-input-row {
+  padding-bottom: 8px;
+}
 
-/* MOBILE KEYBOARD FIX — only apply on small screens */
-@media (max-width: 600px) {
-  .search-body {
-    position: relative;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .search-input-row {
-    padding-bottom: 8px;
-  }
-
-  .search-results-wrapper {
-    position: absolute;
-    top: 48px; /* height of input row */
-    left: 0;
-    right: 0;
-    bottom: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background: var(--bg-primary);
-  }
+.search-results-wrapper {
+  position: absolute;
+  top: 48px; /* height of input row */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-primary);
 }
