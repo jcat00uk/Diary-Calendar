@@ -70,24 +70,61 @@ let _lastHiColor    = '#FFF176';
 
 // Recent text colours — last 5 picks, seeded with defaults
 let _recentTextColors = ['#1a1a18','#6b6a66','#E24B4A','#185FA5','#27500A'];
-const HI_COLORS = ['#FFF176','#B9F6CA','#BBDEFB','#FCE4EC','#FFE0B2','#E1BEE7'];
+
+const HI_COLORS = [
+  '#FFF176','#B9F6CA','#BBDEFB','#FCE4EC','#FFE0B2','#E1BEE7',
+  '#F8BBD0','#C8E6C9','#B3E5FC','#FFFDE7','#F3E5F5','#E8EAF6',
+];
+
+const TEXT_PRESET_COLORS = [
+  '#1a1a18','#6b6a66','#9b9994','#E24B4A','#d4621a','#c49b00',
+  '#185FA5','#0d3d6e','#27500A','#2d8a4e','#6d3a9c','#7d4e24',
+];
+
+let _recentHiColors = [];
 
 function _addRecentTextColor(color) {
   _recentTextColors = [color, ..._recentTextColors.filter(c => c !== color)].slice(0, 5);
 }
 
-/** Return a vivid opening colour for <input type="color">.
- *  If the hex is dark (low brightness) or desaturated (near grey),
- *  fall back to red so the picker opens at full S+V. */
-function _vividDefault(hex) {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#FF0000';
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max < 100 || max - min < 30) return '#ff0000';
-  return hex.toLowerCase();
+function _addRecentHiColor(color) {
+  _recentHiColors = [color, ..._recentHiColors.filter(c => c !== color)].slice(0, 5);
+}
+
+// ── Colour utilities ───────────────────────────────────────────────────────
+
+function _hexToRgb(hex) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function _rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function _rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if      (max === r) h = ((g - b) / d % 6) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else                h = ((r - g) / d + 4) * 60;
+    if (h < 0) h += 360;
+  }
+  return { h: Math.round(h), s: max === 0 ? 0 : d / max, v: max };
+}
+
+function _hsvToRgb(h, s, v) {
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r, g, b;
+  if      (h < 60)  { r=c; g=x; b=0; }
+  else if (h < 120) { r=x; g=c; b=0; }
+  else if (h < 180) { r=0; g=c; b=x; }
+  else if (h < 240) { r=0; g=x; b=c; }
+  else if (h < 300) { r=x; g=0; b=c; }
+  else              { r=c; g=0; b=x; }
+  return { r: Math.round((r+m)*255), g: Math.round((g+m)*255), b: Math.round((b+m)*255) };
 }
 
 /** Apply an execCommand without blurring the diary area */
@@ -97,51 +134,209 @@ function _exec(cmd, value = null) {
   document.execCommand(cmd, false, value);
 }
 
-/** Show a colour swatch popup above the toolbar anchored near anchorEl */
-function _showColorPicker(anchorEl, colors, onPick) {
-  document.querySelectorAll('.fmt-color-picker').forEach(p => p.remove());
+// ── Picker helpers ─────────────────────────────────────────────────────────
 
-  const picker = document.createElement('div');
-  picker.className = 'fmt-color-picker';
-  colors.forEach(c => {
-    const sw = document.createElement('button');
-    sw.className = 'fmt-swatch';
-    sw.style.background = c;
-    sw.setAttribute('aria-label', c);
-    // mousedown: prevent blur on desktop
-    sw.addEventListener('mousedown', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      onPick(c);
-      picker.remove();
-    });
-    // touchend: mobile
-    sw.addEventListener('touchend', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      onPick(c);
-      picker.remove();
-    });
-    picker.appendChild(sw);
-  });
+function _makeSwatch(color, onClick) {
+  const sw = document.createElement('button');
+  sw.className = 'fmt-swatch';
+  sw.style.background = color;
+  sw.setAttribute('aria-label', color);
+  sw.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); onClick(); });
+  sw.addEventListener('touchend',  e => { e.preventDefault(); e.stopPropagation(); onClick(); });
+  return sw;
+}
 
-  document.body.appendChild(picker);
-
-  // Position above the toolbar so it clears the keyboard
+function _positionPicker(picker, anchorEl) {
   const toolbarRect = _toolbar.getBoundingClientRect();
-  const btnRect     = anchorEl.getBoundingClientRect();
-  picker.style.bottom = `${window.innerHeight - toolbarRect.top + 4}px`;
-
-  // Horizontal: align with button, clamp inside app-wrapper
+  picker.style.bottom    = `${window.innerHeight - toolbarRect.top + 4}px`;
+  picker.style.maxHeight = `${toolbarRect.top - 8}px`;
   requestAnimationFrame(() => {
     const pw  = picker.offsetWidth;
     const aw  = document.getElementById('appWrapper');
     const awR = aw ? aw.getBoundingClientRect() : { left: 4, right: window.innerWidth - 4 };
-    const idealLeft = btnRect.left;
-    picker.style.left = `${Math.max(awR.left + 4, Math.min(idealLeft, awR.right - pw - 4))}px`;
+    const r   = anchorEl.getBoundingClientRect();
+    picker.style.left = `${Math.max(awR.left + 4, Math.min(r.left, awR.right - pw - 4))}px`;
+  });
+}
+
+// ── HSV canvas picker — built lazily into a container element ──────────────
+
+function _buildHsvCanvas(container, initialHex, onApply, onCancel) {
+  const W = 200, H = 120, HW = 200;
+  const rgb0 = _hexToRgb(initialHex);
+  let hsv = _rgbToHsv(rgb0.r, rgb0.g, rgb0.b);
+  let currentHex = initialHex;
+
+  container.innerHTML = `
+    <div class="fmt-hsv-canvas-wrap">
+      <canvas class="fmt-hsv-canvas" width="${W}" height="${H}"></canvas>
+      <div class="fmt-hsv-dot"></div>
+    </div>
+    <div class="fmt-hue-wrap">
+      <canvas class="fmt-hue-bar" width="${HW}" height="16"></canvas>
+      <div class="fmt-hue-cursor"></div>
+    </div>
+    <div class="fmt-hsv-preview">
+      <div class="fmt-hsv-swatch" style="background:${initialHex}"></div>
+      <input class="fmt-hex-input" type="text" maxlength="7"
+             value="${initialHex.toUpperCase()}" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="fmt-hsv-actions">
+      <button class="fmt-hsv-cancel">Cancel</button>
+      <button class="fmt-hsv-apply">Apply</button>
+    </div>
+  `;
+
+  const canvas  = container.querySelector('.fmt-hsv-canvas');
+  const ctx     = canvas.getContext('2d');
+  const dot     = container.querySelector('.fmt-hsv-dot');
+  const hueBar  = container.querySelector('.fmt-hue-bar');
+  const hueCtx  = hueBar.getContext('2d');
+  const hueCur  = container.querySelector('.fmt-hue-cursor');
+  const swatch  = container.querySelector('.fmt-hsv-swatch');
+  const hexIn   = container.querySelector('.fmt-hex-input');
+
+  function drawHue() {
+    const g = hueCtx.createLinearGradient(0, 0, HW, 0);
+    for (let i = 0; i <= 360; i += 10) g.addColorStop(i / 360, `hsl(${i},100%,50%)`);
+    hueCtx.fillStyle = g;
+    hueCtx.fillRect(0, 0, HW, 16);
+  }
+
+  function drawGradient() {
+    ctx.clearRect(0, 0, W, H);
+    const gH = ctx.createLinearGradient(0, 0, W, 0);
+    gH.addColorStop(0, '#fff');
+    gH.addColorStop(1, `hsl(${hsv.h},100%,50%)`);
+    ctx.fillStyle = gH; ctx.fillRect(0, 0, W, H);
+    const gV = ctx.createLinearGradient(0, 0, 0, H);
+    gV.addColorStop(0, 'rgba(0,0,0,0)');
+    gV.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = gV; ctx.fillRect(0, 0, W, H);
+  }
+
+  function syncDisplay() {
+    const rgb2 = _hsvToRgb(hsv.h, hsv.s, hsv.v);
+    currentHex = _rgbToHex(rgb2.r, rgb2.g, rgb2.b);
+    swatch.style.background = currentHex;
+    hexIn.value = currentHex.toUpperCase();
+    dot.style.left = (Math.round(hsv.s * (W - 1)) - 5) + 'px';
+    dot.style.top  = (Math.round((1 - hsv.v) * (H - 1)) - 5) + 'px';
+    hueCur.style.left = (Math.round((hsv.h / 360) * (HW - 1)) - 5) + 'px';
+  }
+
+  drawHue();
+  drawGradient();
+  syncDisplay();
+
+  let draggingCanvas = false, draggingHue = false;
+  const stopDrag = () => { draggingCanvas = false; draggingHue = false; };
+
+  function onCanvasMove(e) {
+    if (!draggingCanvas) return;
+    const rect = canvas.getBoundingClientRect();
+    hsv.s = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    hsv.v = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top)  / rect.height));
+    syncDisplay();
+  }
+
+  function onHueMove(e) {
+    if (!draggingHue) return;
+    const rect = hueBar.getBoundingClientRect();
+    hsv.h = Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 360);
+    drawGradient();
+    syncDisplay();
+  }
+
+  canvas.addEventListener('pointerdown',   e => { e.preventDefault(); draggingCanvas = true; canvas.setPointerCapture(e.pointerId); onCanvasMove(e); });
+  canvas.addEventListener('pointermove',   onCanvasMove);
+  canvas.addEventListener('pointerup',     stopDrag);
+  canvas.addEventListener('pointercancel', stopDrag);
+
+  hueBar.addEventListener('pointerdown',   e => { e.preventDefault(); draggingHue = true; hueBar.setPointerCapture(e.pointerId); onHueMove(e); });
+  hueBar.addEventListener('pointermove',   onHueMove);
+  hueBar.addEventListener('pointerup',     stopDrag);
+  hueBar.addEventListener('pointercancel', stopDrag);
+
+  hexIn.addEventListener('mousedown', e => e.stopPropagation());
+  hexIn.addEventListener('input', () => {
+    const v = hexIn.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+      const rgb2 = _hexToRgb(v);
+      hsv = _rgbToHsv(rgb2.r, rgb2.g, rgb2.b);
+      drawGradient();
+      syncDisplay();
+    }
   });
 
-  // Close when tapping outside
+  const cancelBtn = container.querySelector('.fmt-hsv-cancel');
+  const applyBtn  = container.querySelector('.fmt-hsv-apply');
+  cancelBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+  cancelBtn.addEventListener('click',     e => { e.stopPropagation(); onCancel(); });
+  applyBtn.addEventListener('mousedown',  e => { e.preventDefault(); e.stopPropagation(); });
+  applyBtn.addEventListener('click',      e => { e.stopPropagation(); onApply(currentHex); });
+}
+
+// ── Text colour picker ─────────────────────────────────────────────────────
+
+function _showTextColorPicker(anchorEl, onPick) {
+  document.querySelectorAll('.fmt-color-picker').forEach(p => p.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'fmt-color-picker';
+
+  // Recent row
+  const recentLbl = document.createElement('div');
+  recentLbl.className = 'fmt-picker-label';
+  recentLbl.textContent = 'Recent';
+  picker.appendChild(recentLbl);
+  const recentRow = document.createElement('div');
+  recentRow.className = 'fmt-picker-row';
+  _recentTextColors.forEach(c => recentRow.appendChild(_makeSwatch(c, () => { onPick(c); picker.remove(); })));
+  picker.appendChild(recentRow);
+
+  // Preset rows (two rows of 6)
+  const colourLbl = document.createElement('div');
+  colourLbl.className = 'fmt-picker-label';
+  colourLbl.textContent = 'Colours';
+  picker.appendChild(colourLbl);
+  [TEXT_PRESET_COLORS.slice(0, 6), TEXT_PRESET_COLORS.slice(6)].forEach(group => {
+    const row = document.createElement('div');
+    row.className = 'fmt-picker-row';
+    group.forEach(c => row.appendChild(_makeSwatch(c, () => { onPick(c); picker.remove(); })));
+    picker.appendChild(row);
+  });
+
+  // More colours button → lazy HSV section
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'fmt-more-btn';
+  moreBtn.textContent = 'More colours \u25be';
+  moreBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+  moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    hsvSection.style.display = 'flex';
+    moreBtn.style.display = 'none';
+    if (!hsvSection.dataset.built) {
+      hsvSection.dataset.built = '1';
+      _buildHsvCanvas(
+        hsvSection,
+        _lastTextColor,
+        hex => { onPick(hex); picker.remove(); },
+        ()  => { hsvSection.style.display = 'none'; moreBtn.style.display = ''; _positionPicker(picker, anchorEl); }
+      );
+    }
+    _positionPicker(picker, anchorEl);
+  });
+  picker.appendChild(moreBtn);
+
+  const hsvSection = document.createElement('div');
+  hsvSection.className = 'fmt-hsv-section';
+  hsvSection.style.display = 'none';
+  picker.appendChild(hsvSection);
+
+  document.body.appendChild(picker);
+  _positionPicker(picker, anchorEl);
+
   const away = e => {
     if (!picker.contains(e.target) && !anchorEl.contains(e.target)) {
       picker.remove();
@@ -151,52 +346,39 @@ function _showColorPicker(anchorEl, colors, onPick) {
   setTimeout(() => document.addEventListener('pointerdown', away, true), 50);
 }
 
-/** Show text-colour picker: 5 recent swatches + a native colour input button */
-function _showTextColorPicker(anchorEl, onPick) {
+// ── Highlight colour picker ────────────────────────────────────────────────
+
+function _showHiColorPicker(anchorEl, onPick) {
   document.querySelectorAll('.fmt-color-picker').forEach(p => p.remove());
 
   const picker = document.createElement('div');
   picker.className = 'fmt-color-picker';
 
-  _recentTextColors.forEach(c => {
-    const sw = document.createElement('button');
-    sw.className = 'fmt-swatch';
-    sw.style.background = c;
-    sw.setAttribute('aria-label', c);
-    sw.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); onPick(c); picker.remove(); });
-    sw.addEventListener('touchend',  e => { e.preventDefault(); e.stopPropagation(); onPick(c); picker.remove(); });
-    picker.appendChild(sw);
-  });
+  if (_recentHiColors.length > 0) {
+    const lbl = document.createElement('div');
+    lbl.className = 'fmt-picker-label';
+    lbl.textContent = 'Recent';
+    picker.appendChild(lbl);
+    const row = document.createElement('div');
+    row.className = 'fmt-picker-row';
+    _recentHiColors.forEach(c => row.appendChild(_makeSwatch(c, () => { onPick(c); picker.remove(); })));
+    picker.appendChild(row);
+  }
 
-  // Custom colour — built via innerHTML so the value attribute is part of the parsed HTML,
-  // which is the only reliable way to set the opening colour on Android colour pickers.
-  const startColor = _vividDefault(_lastTextColor);
-  const customWrap = document.createElement('div');
-  customWrap.innerHTML =
-    `<input type="color" value="${startColor}"
-            class="fmt-swatch fmt-swatch--custom"
-            aria-label="Choose custom colour"
-            title="Custom colour">`;
-  const customInput = customWrap.querySelector('input');
-  customInput.addEventListener('change', () => {
-    onPick(customInput.value);
-    picker.remove();
-  });
-  customInput.addEventListener('mousedown', e => e.preventDefault());
-  picker.appendChild(customInput);
+  const lbl = document.createElement('div');
+  lbl.className = 'fmt-picker-label';
+  lbl.textContent = 'Highlight';
+  picker.appendChild(lbl);
+
+  for (let i = 0; i < HI_COLORS.length; i += 6) {
+    const row = document.createElement('div');
+    row.className = 'fmt-picker-row';
+    HI_COLORS.slice(i, i + 6).forEach(c => row.appendChild(_makeSwatch(c, () => { onPick(c); picker.remove(); })));
+    picker.appendChild(row);
+  }
 
   document.body.appendChild(picker);
-
-  const toolbarRect = _toolbar.getBoundingClientRect();
-  const btnRect     = anchorEl.getBoundingClientRect();
-  picker.style.bottom = `${window.innerHeight - toolbarRect.top + 4}px`;
-
-  requestAnimationFrame(() => {
-    const pw  = picker.offsetWidth;
-    const aw  = document.getElementById('appWrapper');
-    const awR = aw ? aw.getBoundingClientRect() : { left: 4, right: window.innerWidth - 4 };
-    picker.style.left = `${Math.max(awR.left + 4, Math.min(btnRect.left, awR.right - pw - 4))}px`;
-  });
+  _positionPicker(picker, anchorEl);
 
   const away = e => {
     if (!picker.contains(e.target) && !anchorEl.contains(e.target)) {
@@ -314,26 +496,41 @@ export function initFormatToolbar() {
   }
 
   // ── Highlight ──
+  const hiApplyBtn = _toolbar.querySelector('#fmtHiApply');
+  const hiPickBtn  = _toolbar.querySelector('#fmtHiPick');
+
+  const _applyHiColor = c => {
+    _addRecentHiColor(c);
+    _lastHiColor = c;
+    _toolbar.querySelector('#fmtHiBar').style.background = c;
+  };
+
   _compoundApply(
-    _toolbar.querySelector('#fmtHiApply'),
+    hiApplyBtn,
     () => _lastHiColor,
-    () => { return ['backColor', _lastHiColor]; },
-    HI_COLORS,
-    c => {
-      _lastHiColor = c;
-      _toolbar.querySelector('#fmtHiBar').style.background = c;
-      _exec('backColor', c);
-    }
+    () => ['backColor', _lastHiColor],
+    null,
+    c => { _applyHiColor(c); _exec('backColor', c); }
   );
-  _compoundPick(
-    _toolbar.querySelector('#fmtHiPick'),
-    HI_COLORS,
-    c => {
-      _lastHiColor = c;
-      _toolbar.querySelector('#fmtHiBar').style.background = c;
+
+  hiApplyBtn._openCustomPicker = () => {
+    _showHiColorPicker(hiApplyBtn, c => {
+      _applyHiColor(c);
       if (_activeEditable) { _activeEditable.focus(); _exec('backColor', c); }
-    }
-  );
+      _updateActiveStates();
+    });
+  };
+
+  const openHiPicker = e => {
+    e.preventDefault();
+    _showHiColorPicker(hiPickBtn, c => {
+      _applyHiColor(c);
+      if (_activeEditable) { _activeEditable.focus(); _exec('backColor', c); }
+      _updateActiveStates();
+    });
+  };
+  hiPickBtn.addEventListener('mousedown', openHiPicker);
+  hiPickBtn.addEventListener('touchend',  openHiPicker);
 
   // ── Text colour ──
   function _applyTextColor(c) {
