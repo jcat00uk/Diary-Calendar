@@ -1,14 +1,21 @@
 /* Chronicle — Week view grid and edge navigation arrows */
 
+/* ── Outer scroll container ───────────────────────────────
+   overflow: hidden — diary cells scroll internally, not the whole grid */
 .week-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  overflow: hidden;
+  transition: padding-bottom 0.2s ease;
 }
+
+.week-container.toolbar-open {
+  padding-bottom: 44px;
+}
+
+/* ── Edge nav arrows ──────────────────────────────────── */
 
 .nav-arrow {
   display: flex;
@@ -24,6 +31,7 @@
   border: 0.5px solid var(--color-border);
   transition: background 0.12s;
   -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
 }
 
 .nav-arrow:active {
@@ -39,13 +47,8 @@
   border-right: none;
 }
 
-.nav-arrow--top {
-  border-top: none;
-}
-
-.nav-arrow--bottom {
-  border-bottom: none;
-}
+.nav-arrow--top  { border-top: none; }
+.nav-arrow--bottom { border-bottom: none; }
 
 .nav-arrow .icon {
   width: 12px;
@@ -53,9 +56,13 @@
   flex-shrink: 0;
 }
 
+/* ── Grid + side arrows row ───────────────────────────── */
+
 .grid-with-sides {
-  display: flex;
   flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .nav-arrow--left,
@@ -68,13 +75,8 @@
   overflow: hidden;
 }
 
-.nav-arrow--left {
-  border-left: none;
-}
-
-.nav-arrow--right {
-  border-right: none;
-}
+.nav-arrow--left  { border-left: none; }
+.nav-arrow--right { border-right: none; }
 
 .nav-arrow--left .icon,
 .nav-arrow--right .icon {
@@ -92,12 +94,60 @@
   transform: rotate(180deg);
 }
 
+/* ── Week grid — layout set by data-week-start attribute ── */
+
 .week-grid {
   flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 7px;
-  align-content: start;
-  min-width: 0;
+  position: relative;
 }
+
+/* Monday start: Mon–Thu in two 2-col rows, then Fri (left) + weekend stack (right) */
+.week-grid[data-week-start="mon"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-areas:
+    "mon tue"
+    "wed thu"
+    "fri weekend";
+}
+
+/* Sunday start: half-height Sun strip at top, then 3 weekday rows */
+.week-grid[data-week-start="sun"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 0.5fr 1fr 1fr 1fr;
+  grid-template-areas:
+    "sun sun"
+    "mon tue"
+    "wed thu"
+    "fri sat";
+}
+
+/* Assign each card to its named grid area via data-day */
+.day-card[data-day="sun"] { grid-area: sun; }
+.day-card[data-day="mon"] { grid-area: mon; }
+.day-card[data-day="tue"] { grid-area: tue; }
+.day-card[data-day="wed"] { grid-area: wed; }
+.day-card[data-day="thu"] { grid-area: thu; }
+.day-card[data-day="fri"] { grid-area: fri; }
+.day-card[data-day="sat"] { grid-area: sat; }
+
+/* Weekend column — wraps Sat + Sun in Mon-start mode */
+.weekend-col {
+  grid-area: weekend;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.weekend-col .day-card {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+

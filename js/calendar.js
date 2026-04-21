@@ -35,13 +35,38 @@ export function getDaysOfWeek(weekStart) {
   });
 }
 
-/** Return the ISO week number for a date */
-export function getWeekNumber(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+/**
+ * Chronicle week number based on a financial-year start.
+ * Week 1 starts on the first Monday on or after the FY start date.
+ * @param {Date}   date          - The date to find the week number for
+ * @param {number} fyStartMonth  - FY start month, 0-indexed (default 3 = April)
+ * @param {number} fyStartDay    - FY start day-of-month (default 6 = 6th)
+ */
+export function getChronicleWeekNumber(date, fyStartMonth = 3, fyStartDay = 6) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const m = d.getMonth();
+  const day = d.getDate();
+
+  // Which calendar year does the FY start in for this date?
+  const fyYear = (m > fyStartMonth || (m === fyStartMonth && day >= fyStartDay))
+    ? d.getFullYear()
+    : d.getFullYear() - 1;
+
+  const fyDate = new Date(fyYear, fyStartMonth, fyStartDay);
+
+  // First Monday on or after fyDate
+  const fyDow = fyDate.getDay(); // 0=Sun
+  const toMon = fyDow === 1 ? 0 : fyDow === 0 ? 1 : 8 - fyDow;
+  const week1Start = new Date(fyDate);
+  week1Start.setDate(fyDate.getDate() + toMon);
+
+  // If date is before week1Start it falls in the last week of the prior FY
+  if (d < week1Start) {
+    return getChronicleWeekNumber(new Date(fyYear - 1, fyStartMonth, fyStartDay), fyStartMonth, fyStartDay);
+  }
+
+  return Math.floor((d - week1Start) / (7 * 864e5)) + 1;
 }
 
 /** Shift a week start by `delta` weeks (+1 or -1) */
@@ -83,4 +108,9 @@ export function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
+}
+
+/** 3-letter lowercase day name used for CSS grid-area (e.g. "mon") */
+export function getDayAreaName(date) {
+  return ['sun','mon','tue','wed','thu','fri','sat'][date.getDay()];
 }

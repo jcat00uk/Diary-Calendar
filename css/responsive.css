@@ -4,11 +4,12 @@
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100dvh;
+  height: 100dvh;          /* fixed viewport height — inner diary cells scroll */
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--bg-primary);
   position: relative;
 }
@@ -20,7 +21,6 @@
     border-right: 0.5px solid var(--color-border-strong);
   }
 
-  /* Align settings dropdown to app-wrapper right edge */
   .settings-dropdown {
     right: calc(50% - 230px);
   }

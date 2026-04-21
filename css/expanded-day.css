@@ -174,19 +174,21 @@
 
 .expanded-diary-area {
   flex: 1;
-  padding: 8px 14px 16px;
+  padding: 0 14px 60px;
   font-size: 14px;
   color: var(--text-primary);
-  line-height: 22px;
+  line-height: var(--line-height-diary);
   outline: none;
   background-image: repeating-linear-gradient(
     to bottom,
-    transparent,
-    transparent 21px,
-    var(--color-border) 21px,
-    var(--color-border) 22px
+    transparent 0px,
+    transparent calc(var(--line-height-diary) - 1px),
+    var(--color-border) calc(var(--line-height-diary) - 1px),
+    var(--color-border) var(--line-height-diary)
   );
-  background-position: 0 27px;
+  background-position: 0 0;
+  background-attachment: local;
+  border-top: 0.5px solid var(--color-border);
   min-height: 200px;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -225,4 +227,84 @@
 .expanded-stub-btn .icon {
   width: 14px;
   height: 14px;
+}
+
+/* ── Expanded todo checklist items ──────────────────────── */
+
+.expanded-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.expanded-todo-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1.5px solid var(--accent-green-text);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--accent-green-text);
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.expanded-todo-check.checked {
+  background: var(--accent-green-bg);
+}
+
+.expanded-todo-label {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expanded-todo-item--done .expanded-todo-label {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.expanded-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.expanded-event-delete {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 0.5px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.expanded-event-delete:active {
+  color: #E24B4A;
+  border-color: #E24B4A;
+}
+
+.reminder-icon {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.expanded-empty {
+  padding: 10px 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
 }

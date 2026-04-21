@@ -32,6 +32,13 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  /* Diary lined-paper metrics — must stay in sync with diary text line-height */
+  --line-height-diary: 22px;
+  --diary-padding-top: 6px;
+  /* Day card theming */
+  --day-card-bg: #EEF4FB;
+  --day-card-bg-weekend: #F3F7FB;
+  --day-card-border: rgba(55,138,221,0.18);
 }
 
 body.dark {
@@ -43,6 +50,9 @@ body.dark {
   --text-tertiary: #6b6a66;
   --color-border: rgba(255,255,255,0.10);
   --color-border-strong: rgba(255,255,255,0.20);
+  --day-card-bg: #1a2230;
+  --day-card-bg-weekend: #161d28;
+  --day-card-border: rgba(55,138,221,0.15);
 }
 
 html {
@@ -58,8 +68,8 @@ html {
 
 body {
   background: var(--bg-tertiary);
-  min-height: 100dvh;
-  overflow-x: hidden;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 button {
@@ -85,6 +95,8 @@ svg {
   fill: currentColor;
 }
 
+/* ── Toast ─────────────────────────────────────────────── */
+
 .toast {
   position: fixed;
   bottom: calc(var(--safe-bottom) + 80px);
@@ -107,4 +119,19 @@ svg {
 .toast.toast--visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ── Coming-soon badge (settings) ───────────────────────── */
+
+.badge-soon {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--accent-amber-bg);
+  color: var(--accent-amber-text);
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
 }

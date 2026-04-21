@@ -1,40 +1,42 @@
 /* Chronicle — Individual day card styles */
 
+/* ── Card shell ─────────────────────────────────────────── */
+
 .day-card {
-  background: var(--bg-primary);
-  border: 0.5px solid var(--color-border);
+  background: var(--day-card-bg);
+  border: 0.5px solid var(--day-card-border);
   border-radius: var(--radius-card);
   display: flex;
   flex-direction: column;
-  min-height: 160px;
+  height: 100%;        /* fills its CSS grid row */
+  min-height: 0;
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.15s;
   position: relative;
 }
 
+.day-card--weekend {
+  background: var(--day-card-bg-weekend);
+}
+
+.day-card--today,
 .day-card.today {
   border: 1.5px solid var(--today-border);
-}
-
-.day-card.weekend-half {
-  min-height: 90px;
-}
-
-.day-card.full-width {
-  grid-column: 1 / -1;
 }
 
 .day-card.pressing {
   background: var(--bg-secondary);
 }
 
+/* ── Day header ─────────────────────────────────────────── */
+
 .day-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px 5px;
-  border-bottom: 0.5px solid var(--color-border);
+  border-bottom: 0.5px solid var(--day-card-border);
   flex-shrink: 0;
 }
 
@@ -52,15 +54,19 @@
   color: var(--text-secondary);
 }
 
+.day-card--today .day-name,
+.day-card--today .day-number,
 .day-card.today .day-name,
 .day-card.today .day-number {
   color: var(--today-text);
 }
 
-.day-card.weekend .day-name,
-.day-card.weekend .day-number {
+.day-card--weekend .day-name,
+.day-card--weekend .day-number {
   color: var(--text-tertiary);
 }
+
+/* ── Events strip ───────────────────────────────────────── */
 
 .events-strip {
   padding: 4px 6px 3px;
@@ -78,16 +84,16 @@
   font-size: 10px;
   max-width: 100%;
   min-width: 0;
+  cursor: pointer;
+}
+
+.event-pill:active {
+  opacity: 0.75;
 }
 
 .event-pill--event {
   background: var(--accent-blue-bg);
   color: var(--accent-blue-text);
-}
-
-.event-pill--todo {
-  background: var(--accent-green-bg);
-  color: var(--accent-green-text);
 }
 
 .event-pill--reminder {
@@ -109,26 +115,134 @@
   padding: 1px 5px;
 }
 
+/* ── Todo checkboxes (inline in events strip) ───────────── */
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  padding: 1px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.todo-item:active {
+  opacity: 0.75;
+}
+
+.todo-checkbox {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1.5px solid var(--accent-green-text);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--accent-green-text);
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.todo-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  color: var(--accent-green-text);
+}
+
+.todo-item--done .todo-label {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.todo-item--done .todo-checkbox {
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-text);
+}
+
+/* ── Inline event detail card (Fix 13) ──────────────────── */
+
+.event-detail {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 2px 0;
+  font-size: 11px;
+}
+
+.event-detail__title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.event-detail__time,
+.event-detail__notes {
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.event-detail__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.event-detail__btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.event-detail__btn:active {
+  background: var(--bg-tertiary);
+}
+
+.event-detail__delete {
+  color: #c0392b;
+  border-color: rgba(192,57,43,0.3);
+}
+
+/* ── Diary area — lined paper, internal scroll ──────────── */
+
 .diary-area {
   flex: 1;
-  padding: 4px 8px 6px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: var(--diary-padding-top) 8px 6px;
   font-size: 12px;
   color: var(--text-primary);
-  line-height: 22px;
+  line-height: var(--line-height-diary);
   outline: none;
-  overflow: hidden;
   cursor: text;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent,
-    transparent 21px,
-    var(--color-border) 21px,
-    var(--color-border) 22px
-  );
-  background-position: 0 27px;
-  min-height: 60px;
   word-break: break-word;
   overflow-wrap: break-word;
+  white-space: pre-wrap;
+  /* Lined paper — background-attachment: local scrolls lines WITH the text */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent calc(var(--line-height-diary) - 1px),
+    var(--color-border) calc(var(--line-height-diary) - 1px),
+    var(--color-border) var(--line-height-diary)
+  );
+  background-position: 0 var(--diary-padding-top);
+  background-attachment: local;
 }
 
 .diary-area:empty::before {
@@ -138,7 +252,192 @@
   pointer-events: none;
 }
 
-.day-card.weekend-half .diary-area {
-  min-height: 32px;
-  background-position: 0 26px;
+/* ── Format toolbar — fixed bottom ribbon, shows on diary focus ─ */
+
+.format-toolbar {
+  position: fixed;
+  /* bottom set by visualViewport JS; fallback via CSS var */
+  bottom: var(--keyboard-offset, 0px);
+  /* constrain to app-wrapper width (480px) on desktop; full-width on mobile */
+  left:  max(0px, calc(50vw - 240px));
+  right: max(0px, calc(50vw - 240px));
+  height: 44px;
+  background: var(--bg-secondary);
+  border-top: 0.5px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+  z-index: 400;
+  transform: translateY(100%);
+  transition: transform 0.2s ease;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.format-toolbar::-webkit-scrollbar { display: none; }
+
+.format-toolbar.visible {
+  transform: translateY(0);
+}
+
+/* ── Individual format buttons ─────────────────────────────── */
+
+.fmt-btn {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0 6px;
+  transition: background 0.1s, transform 0.08s, opacity 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Active/pressed state: indent + dim */
+.fmt-btn:active:not(.active) {
+  transform: scale(0.84);
+  opacity: 0.65;
+  background: var(--bg-tertiary);
+}
+
+/* Toggled-on state (bold, italic, underline active in selection) */
+.fmt-btn.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 0.5px solid var(--color-border-strong);
+}
+
+.fmt-sep {
+  width: 0.5px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Compound colour button (Apply + Picker arrow) ──────────── */
+
+.fmt-compound {
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.fmt-apply {
+  border-radius: 0;
+  border: none;
+  padding: 0 5px;
+  min-width: 28px;
+}
+
+.fmt-pick {
+  border-radius: 0;
+  border: none;
+  border-left: 0.5px solid var(--color-border);
+  padding: 0 4px;
+  min-width: 16px;
+  font-size: 8px;
+  color: var(--text-tertiary);
+}
+
+.fmt-compound-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.fmt-compound-letter {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fmt-compound-bar {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* ── Colour picker popup ────────────────────────────────────── */
+
+.fmt-color-picker {
+  position: fixed;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 9px;
+  background: var(--bg-primary);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  z-index: 500;
+  width: auto;
+}
+
+.fmt-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.12);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  touch-action: manipulation;
+}
+
+.fmt-swatch:active {
+  transform: scale(0.82);
+  box-shadow: 0 0 0 2.5px var(--today-border);
+}
+
+.fmt-swatch--custom {
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Hide the browser's inner colour swatch, show only our gradient background */
+.fmt-swatch--custom::-webkit-color-swatch-wrapper { display: none; }
+.fmt-swatch--custom::-webkit-color-swatch         { display: none; }
+.fmt-swatch--custom::-moz-color-swatch            { display: none; }
+
+/* ── Diary saved indicator ──────────────────────────────── */
+
+.diary-saved-indicator {
+  font-size: 10px;
+  color: var(--accent-green-text);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  margin-left: 6px;
+}
+
+.diary-saved-indicator.visible {
+  opacity: 1;
+}
+
+/* ── Reminder icon on event pills ───────────────────────── */
+
+.pill-reminder {
+  font-size: 9px;
+  opacity: 0.7;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
