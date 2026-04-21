@@ -412,10 +412,14 @@ function nextMonth()  { state.currentWeekStart = navigateMonth(state.currentWeek
 let _expandedOverlay = null;
 let _expandedDateKey  = null;
 
-function openExpandedDay(dateKey) {
+function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
   if (_expandedOverlay) closeExpandedDay();
 
-  history.pushState({ chronicle: 'expanded', dateKey }, '');
+  if (replaceHistory) {
+    history.replaceState({ chronicle: 'expanded', dateKey }, '');
+  } else {
+    history.pushState({ chronicle: 'expanded', dateKey }, '');
+  }
 
   const date  = parseDate(dateKey);
   const title = date.toLocaleDateString('default', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -426,6 +430,11 @@ function openExpandedDay(dateKey) {
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', `Day view: ${title}`);
 
+  const prevDate   = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
+  const nextDate   = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  const prevLabel  = prevDate.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
+  const nextLabel  = nextDate.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
+
   overlay.innerHTML = `
     <header class="expanded-header">
       <button class="expanded-back" aria-label="${STRINGS.back}">
@@ -435,7 +444,12 @@ function openExpandedDay(dateKey) {
       <div class="expanded-title">${esc(title)}</div>
       <button class="expanded-add-btn" aria-label="${STRINGS.addEvent}">+ ${STRINGS.addEvent}</button>
     </header>
-    <div class="expanded-body">
+    <div class="expanded-with-sides">
+      <div class="expanded-side-nav expanded-side-nav--left" role="button" tabindex="0" aria-label="Previous day: ${esc(prevLabel)}">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-left"/></svg>
+        <span class="rotated-text">${esc(prevLabel)}</span>
+      </div>
+      <div class="expanded-body">
       <div class="expanded-section">
         <div class="expanded-section-header">${STRINGS.eventSection}</div>
         <div class="expanded-event-list" id="expandedEventList"></div>
@@ -447,6 +461,11 @@ function openExpandedDay(dateKey) {
           <span class="diary-saved-indicator"></span>
         </div>
         <div class="expanded-diary-area" tabindex="0"></div>
+      </div>
+      </div>
+      <div class="expanded-side-nav expanded-side-nav--right" role="button" tabindex="0" aria-label="Next day: ${esc(nextLabel)}">
+        <span class="rotated-text">${esc(nextLabel)}</span>
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>
     </div>
     <div class="expanded-stubs">
@@ -493,8 +512,21 @@ function openExpandedDay(dateKey) {
 
   renderExpandedEvents(overlay, dateKey);
 
+  const navigateExpandedDay = (targetDate) => {
+    const targetKey = formatDate(targetDate);
+    goToWeek(targetDate);
+    if (_expandedOverlay) {
+      _expandedOverlay.remove();
+      _expandedOverlay = null;
+      _expandedDateKey  = null;
+    }
+    openExpandedDay(targetKey, { replaceHistory: true });
+  };
+
   // Back button → history.back() → popstate → closeExpandedDay()
   overlay.querySelector('.expanded-back').addEventListener('click', () => history.back());
+  overlay.querySelector('.expanded-side-nav--left').addEventListener('click', () => navigateExpandedDay(prevDate));
+  overlay.querySelector('.expanded-side-nav--right').addEventListener('click', () => navigateExpandedDay(nextDate));
   overlay.querySelector('.expanded-add-btn').addEventListener('click', () => {
     history.back();
     setTimeout(() => openAddEventModal(dateKey), 350);
