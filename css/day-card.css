@@ -212,6 +212,22 @@
   border-color: rgba(192,57,43,0.3);
 }
 
+/* ── Holiday badge ──────────────────────────────────────── */
+
+.holiday-badge {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--accent-amber-text);
+  background: var(--accent-amber-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin: 0 4px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Diary area — lined paper, internal scroll ──────────── */
 
 .diary-area {

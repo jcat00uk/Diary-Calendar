@@ -23,6 +23,8 @@ import { initGestures } from './gestures.js';
 import { pushUndo, undo, redo } from './undo.js';
 import { markDirty, registerDirtyCallback } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
+import { buildICS } from './ical.js';
+import { getAllHolidays, ensureHolidaySettings, getHolidayForDate } from './holidays.js';
 
 
 
@@ -62,6 +64,7 @@ const STRINGS = {
   attachImage:      'Attach image',
   moodTag:          'Mood tag',
   exportDone:       'Data exported',
+  exportICalDone:   'Calendar exported',
   importDone:       'Data imported',
   searchPlaceholder:'Search diary and events…',
   search:           'Search',
@@ -103,6 +106,7 @@ function loadData() {
     data = buildDefaultData();
   }
   if (!data.series) data.series = [];
+  ensureHolidaySettings(data);
   // Migrate legacy 'reminder' type entries to 'event'
   for (const day of Object.values(data.days || {})) {
     for (const evt of (day.events || [])) {
@@ -276,9 +280,11 @@ function renderWeekGrid() {
 
 /** Build the inner HTML for a single day card */
 function buildCardHTML(date, dateKey) {
-  const events = getEventsForDate(state.data, dateKey);
-  const shown  = events.slice(0, 3);
-  const extra  = events.length - 3;
+  const events  = getEventsForDate(state.data, dateKey);
+  const shown   = events.slice(0, 3);
+  const extra   = events.length - 3;
+  const holiday = getHolidayForDate(state.data, dateKey);
+  const holidayHTML = holiday ? `<div class="holiday-badge">${esc(holiday)}</div>` : '';
 
   const itemsHTML = shown.map(evt => {
     if (evt.type === 'todo') {
@@ -306,6 +312,7 @@ function buildCardHTML(date, dateKey) {
       <span class="day-name">${getDayName(date)}</span>
       <span class="day-number">${date.getDate()}</span>
     </div>
+    ${holidayHTML}
     <div class="events-strip">${itemsHTML}${moreHTML}</div>
     <div class="diary-area" tabindex="0"></div>
   `;
@@ -388,6 +395,8 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
   const prevLabel  = prevDate.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
   const nextLabel  = nextDate.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
 
+  const expandedHoliday = getHolidayForDate(state.data, dateKey);
+
   overlay.innerHTML = `
     <header class="expanded-header">
       <button class="expanded-back" aria-label="${STRINGS.back}">
@@ -397,6 +406,7 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
       <div class="expanded-title">${esc(title)}</div>
       <button class="expanded-add-btn" aria-label="${STRINGS.addEvent}">+ ${STRINGS.addEvent}</button>
     </header>
+    ${expandedHoliday ? `<div class="expanded-holiday-label">${esc(expandedHoliday)}</div>` : ''}
     <div class="expanded-with-sides">
       <div class="expanded-side-nav expanded-side-nav--left" role="button" tabindex="0" aria-label="Previous day: ${esc(prevLabel)}">
         <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-left"/></svg>
@@ -1199,7 +1209,8 @@ function openSettingsDropdown() {
   history.pushState({ chronicle: 'modal', modal: 'settings' }, '');
 
   const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6,
-          agendaBeforeDays = 14, agendaAheadDays = 60 } = state.data.settings;
+          agendaBeforeDays = 14, agendaAheadDays = 60,
+          holidays: holidaySettings = { enabled: true, hidden: [] } } = state.data.settings;
   const lastSyncStr = gdrive.lastSync
     ? STRINGS.lastSync.replace('{t}', new Date(gdrive.lastSync).toLocaleString())
     : STRINGS.neverSynced;
@@ -1277,6 +1288,7 @@ function openSettingsDropdown() {
     </div>
     <div class="settings-section">
       <div class="settings-row" data-action="export"><span class="settings-action">Export JSON</span></div>
+      <div class="settings-row" data-action="exportIcal"><span class="settings-action">Export iCal (.ics)</span></div>
       <div class="settings-row" data-action="import"><span class="settings-action">Import JSON</span></div>
       <div class="settings-row" data-action="clearall"><span class="settings-action settings-action--destructive">Clear all data</span></div>
     </div>
@@ -1303,6 +1315,14 @@ function openSettingsDropdown() {
           <div class="toggle-pill-btn ${!gdrive.enabled ? 'active' : ''}" data-gdrive="off">Off</div>
         </div>
       </div>
+      <div class="settings-row">
+        <div class="settings-label">UK Bank Holidays</div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${holidaySettings.enabled  ? 'active' : ''}" data-holidays="on">On</div>
+          <div class="toggle-pill-btn ${!holidaySettings.enabled ? 'active' : ''}" data-holidays="off">Off</div>
+        </div>
+      </div>
+      <div class="settings-row" data-action="manageHolidays"><span class="settings-action">Manage bank holidays</span></div>
       <div class="settings-row" data-action="about"><span class="settings-action">About / Help</span></div>
     </div>
     <div class="settings-section">
@@ -1310,7 +1330,6 @@ function openSettingsDropdown() {
         <span class="settings-label" style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.06em">Coming soon</span>
       </div>
       <div class="settings-row"><span class="settings-label">Google Photos</span><span class="badge-soon">Soon</span></div>
-      <div class="settings-row"><span class="settings-label">iCal export</span><span class="badge-soon">Soon</span></div>
     </div>
   `;
 
@@ -1387,6 +1406,15 @@ function openSettingsDropdown() {
     });
   });
 
+  dropdown.querySelectorAll('[data-holidays]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.data.settings.holidays.enabled = btn.dataset.holidays === 'on';
+      saveData();
+      dropdown.querySelectorAll('[data-holidays]').forEach(b => b.classList.toggle('active', b === btn));
+      renderWeekGrid();
+    });
+  });
+
   dropdown.querySelectorAll('[data-action]').forEach(row => {
     row.addEventListener('click', () => {
       const action = row.dataset.action;
@@ -1400,7 +1428,9 @@ function openSettingsDropdown() {
 
 function handleSettingsAction(action) {
   switch (action) {
-    case 'export': exportJSON(); break;
+    case 'export':          exportJSON();          break;
+    case 'exportIcal':      exportIcal();          break;
+    case 'manageHolidays':  openHolidaysModal();   break;
 
     case 'import': {
       const input = document.createElement('input');
@@ -1440,6 +1470,106 @@ function handleSettingsAction(action) {
   }
 }
 
+function openHolidaysModal() {
+  const thisYear = new Date().getFullYear();
+  const holidays = getAllHolidays(thisYear, thisYear + 2);
+  const hidden   = state.data.settings.holidays.hidden;
+  const enabled  = state.data.settings.holidays.enabled;
+
+  history.pushState({ chronicle: 'modal', modal: 'holidays' }, '');
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.addEventListener('click', () => history.back());
+
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet';
+
+  const byYear = {};
+  holidays.forEach(h => {
+    const y = h.dateKey.slice(0, 4);
+    (byYear[y] = byYear[y] || []).push(h);
+  });
+
+  const listHTML = Object.entries(byYear).map(([year, list]) => `
+    <div class="holidays-year-header">${year}</div>
+    ${list.map(h => {
+      const isHidden = hidden.includes(h.dateKey);
+      const d = new Date(h.dateKey + 'T00:00:00');
+      const fmt = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      return `<div class="holiday-row">
+        <div class="holiday-row-info">
+          <div class="holiday-row-name">${esc(h.name)}</div>
+          <div class="holiday-row-date">${esc(fmt)}</div>
+        </div>
+        <button class="holiday-row-btn ${isHidden ? 'is-hidden' : ''}"
+                data-hkey="${esc(h.dateKey)}">${isHidden ? 'Hidden' : 'Shown'}</button>
+      </div>`;
+    }).join('')}
+  `).join('');
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="sheet-cancel" id="holidaysClose">Close</button>
+      <span class="sheet-title">UK Bank Holidays</span>
+      <span></span>
+    </div>
+    <div class="holidays-toggle-row">
+      <span class="holidays-toggle-label">Show on calendar</span>
+      <div class="toggle-pill">
+        <div class="toggle-pill-btn ${enabled  ? 'active' : ''}" data-hol-global="on">On</div>
+        <div class="toggle-pill-btn ${!enabled ? 'active' : ''}" data-hol-global="off">Off</div>
+      </div>
+    </div>
+    <div class="sheet-body" style="padding:0">
+      ${listHTML}
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(sheet);
+
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  const close = () => history.back();
+  sheet.querySelector('#holidaysClose').addEventListener('click', close);
+
+  sheet.querySelectorAll('[data-hol-global]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.data.settings.holidays.enabled = btn.dataset.holGlobal === 'on';
+      saveData();
+      sheet.querySelectorAll('[data-hol-global]').forEach(b => b.classList.toggle('active', b === btn));
+      renderWeekGrid();
+    });
+  });
+
+  sheet.querySelectorAll('[data-hkey]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.hkey;
+      const idx = state.data.settings.holidays.hidden.indexOf(key);
+      if (idx === -1) {
+        state.data.settings.holidays.hidden.push(key);
+        btn.textContent = 'Hidden';
+        btn.classList.add('is-hidden');
+      } else {
+        state.data.settings.holidays.hidden.splice(idx, 1);
+        btn.textContent = 'Shown';
+        btn.classList.remove('is-hidden');
+      }
+      saveData();
+      renderWeekGrid();
+    });
+  });
+
+  const onPop = () => {
+    sheet.classList.remove('open');
+    setTimeout(() => { sheet.remove(); backdrop.remove(); }, 300);
+    window.removeEventListener('popstate', onPop);
+  };
+  window.addEventListener('popstate', onPop);
+}
+
 function exportJSON() {
   const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -1447,6 +1577,16 @@ function exportJSON() {
   a.href = url; a.download = `chronicle-export-${formatDate(new Date())}.json`;
   a.click(); URL.revokeObjectURL(url);
   showToast(STRINGS.exportDone);
+}
+
+function exportIcal() {
+  const ics  = buildICS(state.data);
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `chronicle-${formatDate(new Date())}.ics`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast(STRINGS.exportICalDone);
 }
 
 function closeSettingsDropdown() {

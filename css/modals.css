@@ -512,6 +512,77 @@ select.field-input {
   padding: 0 4px;
 }
 
+/* ── Holidays modal ────────────────────────────────────── */
+
+.holidays-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.holidays-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.holidays-year-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 14px 16px 6px;
+}
+
+.holiday-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--color-border);
+  gap: 12px;
+}
+
+.holiday-row:last-child {
+  border-bottom: none;
+}
+
+.holiday-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.holiday-row-name {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.holiday-row-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.holiday-row-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 0.5px solid var(--color-border-strong);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.holiday-row-btn.is-hidden {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
 
 /* MOBILE KEYBOARD FIX — only apply on small screens */
 @media (max-width: 600px) {
