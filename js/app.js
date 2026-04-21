@@ -22,10 +22,21 @@ import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
 import { initGestures } from './gestures.js';
 import { pushUndo, undo, redo } from './undo.js';
 import { markDirty, registerDirtyCallback } from './sync.js';
+import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 
 
 
 
+
+function placeCursorAtEnd(el) {
+  if (!el) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
 
 // ── All user-visible strings (i18n-ready) ──────────────────────────────────
 
@@ -35,7 +46,6 @@ const STRINGS = {
   today:            'Today',
   addEvent:         'Add event',
   addTodo:          'Add todo',
-  addReminder:      'Add reminder',
   expandDay:        'Expand day',
   copyDay:          "Copy day's entries",
   clearDay:         'Clear day',
@@ -93,6 +103,15 @@ function loadData() {
     data = buildDefaultData();
   }
   if (!data.series) data.series = [];
+  // Migrate legacy 'reminder' type entries to 'event'
+  for (const day of Object.values(data.days || {})) {
+    for (const evt of (day.events || [])) {
+      if (evt.type === 'reminder') evt.type = 'event';
+    }
+  }
+  for (const s of data.series) {
+    if (s.type === 'reminder') s.type = 'event';
+  }
   return data;
 }
 
@@ -101,93 +120,27 @@ function getSeriesForOccurrence(evt) {
 }
 
 function buildDefaultData() {
-  const today = new Date();
-  const todayKey = formatDate(today);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const tomorrowKey = formatDate(tomorrow);
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const yesterdayKey = formatDate(yesterday);
-  const now = Date.now();
-
   return {
-  version: 1,
-  settings: {
-    weekStart:      'mon',
-    theme:          'light',
-    notifications:  true,
-    fyStartMonth:   3,
-    fyStartDay:     6,
-    agendaBeforeDays: 14,
-    agendaAheadDays:  60,
-    gdrive: { enabled: false, lastSync: null },
-  },
-
-  days: {
-    [todayKey]: {
-      diary: 'Morning run felt good. Clear skies.',
-      events: [
-        {
-          id: 'sample1',
-          type: 'event',
-          title: 'Team standup',
-          time: '09:00',
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: 15,
-          created: now,
-          modified: now
-        },
-        {
-          id: 'sample2',
-          type: 'todo',
-          title: 'Review PR #42',
-          time: null,
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: null,
-          created: now,
-          modified: now
-        }
-      ],
-      images: []
+    version: 1,
+    settings: {
+      weekStart:        'mon',
+      theme:            'light',
+      notifications:    true,
+      fyStartMonth:     3,
+      fyStartDay:       6,
+      agendaBeforeDays: 14,
+      agendaAheadDays:  60,
+      gdrive: { enabled: false, lastSync: null },
     },
-
-    [tomorrowKey]: {
-      diary: '',
-      events: [
-        {
-          id: 'sample3',
-          type: 'reminder',
-          title: 'Call dentist',
-          time: '10:00',
-          done: false,
-          repeat: null,
-          notes: '',
-          reminderMinutes: 30,
-          created: now,
-          modified: now
-        }
-      ],
-      images: []
-    },
-
-    [yesterdayKey]: {
-      diary: 'Finished the report. Feeling productive.',
-      events: [],
-      images: []
-    }
-  },
-
-  // ✅ The ONLY correct place for repeating events
-  series: []
-};
+    days:   {},
+    series: [],
+  };
 }
 
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
   markDirty();
+  scheduleReminders(state.data);
 }
 
 function ensureDay(dateKey) {
@@ -332,7 +285,7 @@ function buildCardHTML(date, dateKey) {
       return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}"
                    data-todo-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
         <span class="todo-checkbox">${evt.done ? '&#10003;' : ''}</span>
-        <span class="todo-label">${esc(evt.title)}</span>
+        <span class="todo-label">${evt.title}</span>
       </div>`;
     }
     const timeStr = evt.time ? `${evt.time} ` : '';
@@ -340,7 +293,7 @@ function buildCardHTML(date, dateKey) {
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
     return `<div class="event-pill event-pill--${esc(evt.type)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
-      <span class="event-pill-text">${timeStr}${esc(evt.title)}</span>${bell}
+      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
   }).join('');
 
@@ -374,7 +327,7 @@ function refreshCardEvents(dateKey) {
       return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}"
                    data-todo-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
         <span class="todo-checkbox">${evt.done ? '&#10003;' : ''}</span>
-        <span class="todo-label">${esc(evt.title)}</span>
+        <span class="todo-label">${evt.title}</span>
       </div>`;
     }
     const timeStr = evt.time ? `${evt.time} ` : '';
@@ -382,7 +335,7 @@ function refreshCardEvents(dateKey) {
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
     return `<div class="event-pill event-pill--${esc(evt.type)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
-      <span class="event-pill-text">${timeStr}${esc(evt.title)}</span>${bell}
+      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
   }).join('') + (extra > 0
     ? `<div class="events-more">${STRINGS.moreEvents.replace('{n}', extra)}</div>`
@@ -559,7 +512,7 @@ function renderExpandedEvents(overlay, dateKey) {
                       data-check="${esc(evt.id)}" aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">
                 ${evt.done ? '✓' : ''}
               </button>
-              <span class="expanded-todo-label">${esc(evt.title)}</span>
+              <span class="expanded-todo-label">${evt.title}</span>
               <div class="expanded-item-actions">
                 ${bell}
                 <button class="expanded-event-edit"   data-edit="${esc(evt.id)}"   aria-label="Edit">Edit</button>
@@ -574,7 +527,7 @@ function renderExpandedEvents(overlay, dateKey) {
           <div class="expanded-event-item" data-id="${esc(evt.id)}">
             <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
             <div class="expanded-event-content">
-              <div class="expanded-event-title">${esc(evt.title)}</div>
+              <div class="expanded-event-title">${evt.title}</div>
               ${time}
             </div>
             <div class="expanded-item-actions">
@@ -626,7 +579,9 @@ function renderExpandedEvents(overlay, dateKey) {
       refreshVisibleWeekCards();
     });
   });
+
 }
+
 
 function closeExpandedDay() {
   if (!_expandedOverlay) return;
@@ -652,6 +607,9 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   const time   = existing?.time  ?? '';
   const notes  = existing?.notes ?? '';
   const reminder = existing?.reminderMinutes ?? '';
+  const reminderPresets  = [0, 15, 60, 1440, 10080];
+  const isCustomReminder = reminder !== '' && !reminderPresets.includes(reminder);
+  const customDays       = isCustomReminder ? Math.round(reminder / 1440) : '';
 
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
@@ -674,8 +632,9 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
 
       <div class="field-group">
         <label class="field-label" for="evtTitle">Title</label>
-        <input class="field-input" id="evtTitle" type="text"
-               placeholder="Entry title" value="${esc(title)}">
+        <div class="field-input event-title-input" id="evtTitle"
+             contenteditable="true" role="textbox" spellcheck="true"
+             data-placeholder="Entry title" aria-label="Entry title"></div>
       </div>
 
       <div class="field-group">
@@ -683,7 +642,6 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
         <div class="segmented-control" id="typeControl">
           <div class="seg-btn ${type === 'event' ? 'active' : ''}" data-type="event">Event</div>
           <div class="seg-btn ${type === 'todo' ? 'active' : ''}" data-type="todo">Todo</div>
-          <div class="seg-btn ${type === 'reminder' ? 'active' : ''}" data-type="reminder">Reminder</div>
         </div>
       </div>
 
@@ -701,13 +659,17 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
         <label class="field-label" for="evtReminder">Reminder</label>
         <select class="field-input" id="evtReminder">
           <option value="">None</option>
-          <option value="0" ${reminder === 0 ? 'selected' : ''}>At time of event</option>
-          <option value="5" ${reminder === 5 ? 'selected' : ''}>5 minutes before</option>
-          <option value="15" ${reminder === 15 ? 'selected' : ''}>15 minutes before</option>
-          <option value="30" ${reminder === 30 ? 'selected' : ''}>30 minutes before</option>
-          <option value="60" ${reminder === 60 ? 'selected' : ''}>1 hour before</option>
-          <option value="1440" ${reminder === 1440 ? 'selected' : ''}>1 day before</option>
+          <option value="0"     ${reminder === 0     ? 'selected' : ''}>At time of event</option>
+          <option value="15"    ${reminder === 15    ? 'selected' : ''}>15 minutes before</option>
+          <option value="60"    ${reminder === 60    ? 'selected' : ''}>1 hour before</option>
+          <option value="1440"  ${reminder === 1440  ? 'selected' : ''}>1 day before</option>
+          <option value="10080" ${reminder === 10080 ? 'selected' : ''}>1 week before</option>
+          <option value="custom" ${isCustomReminder  ? 'selected' : ''}>Custom</option>
         </select>
+        <input class="field-input" id="evtReminderCustom" type="number" min="1"
+               placeholder="Days before event"
+               value="${customDays}"
+               style="margin-top:6px;${isCustomReminder ? '' : 'display:none'}">
       </div>
 
       <!-- Repeat Frequency -->
@@ -777,6 +739,19 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   document.body.appendChild(sheet);
   _addEventBackdrop = backdrop;
   _addEventSheet    = sheet;
+
+  // Populate contenteditable title (must be done after DOM insertion)
+  const titleEl = sheet.querySelector('#evtTitle');
+  if (title) {
+    if (/<[a-z]/i.test(title)) {
+      titleEl.innerHTML = title;
+    } else {
+      titleEl.textContent = title;
+    }
+  }
+  titleEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); }
+  });
 
   // -----------------------------
   // REPEAT UI JS (correct place)
@@ -860,31 +835,33 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
 
   let selectedType = type;
 
-  const updateReminderVisibility = t => {
-    const rg = sheet.querySelector('#reminderGroup');
-    if (rg) rg.style.display = t === 'todo' ? 'none' : '';
-  };
-  updateReminderVisibility(selectedType);
-
   sheet.querySelectorAll('.seg-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedType = btn.dataset.type;
-      updateReminderVisibility(selectedType);
       sheet.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
     });
+  });
+
+  sheet.querySelector('#evtReminder').addEventListener('change', function() {
+    const custom = sheet.querySelector('#evtReminderCustom');
+    custom.style.display = this.value === 'custom' ? '' : 'none';
+    if (this.value === 'custom') custom.focus();
   });
 
   sheet.querySelector('#sheetCancel').addEventListener('click', () => history.back());
 
   sheet.querySelector('#sheetSave').addEventListener('click', () => {
-    const titleVal = sheet.querySelector('#evtTitle').value.trim();
-    if (!titleVal) { sheet.querySelector('#evtTitle').focus(); return; }
+    const titleEl  = sheet.querySelector('#evtTitle');
+    const titleVal = titleEl.innerHTML.trim();
+    if (!titleEl.textContent.trim()) { titleEl.focus(); return; }
 
     const dateVal = sheet.querySelector('#evtDate').value || dateKey;
     const timeVal = sheet.querySelector('#evtTime').value;
     const notesVal = sheet.querySelector('#evtNotes').value;
     const reminderRaw = sheet.querySelector('#evtReminder').value;
-    const reminderVal = reminderRaw !== '' ? Number(reminderRaw) : null;
+    const reminderVal = reminderRaw === ''       ? null
+                      : reminderRaw === 'custom' ? ((Number(sheet.querySelector('#evtReminderCustom').value) || 0) * 1440 || null)
+                      : Number(reminderRaw);
 
     pushUndo(JSON.parse(JSON.stringify(state.data)));
 
@@ -973,7 +950,7 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
   });
 
   requestAnimationFrame(() => sheet.classList.add('open'));
-  setTimeout(() => sheet.querySelector('#evtTitle').focus(), 350);
+  setTimeout(() => { const t = sheet.querySelector('#evtTitle'); t?.focus(); placeCursorAtEnd(t); }, 350);
 }
 
 
@@ -1121,10 +1098,6 @@ function openQuickActions(dateKey) {
         <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-check"/></svg></div>
         ${STRINGS.addTodo}
       </div>
-      <div class="quick-action-item" data-action="reminder" role="button" tabindex="0">
-        <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-bell"/></svg></div>
-        ${STRINGS.addReminder}
-      </div>
       <div class="quick-action-item" data-action="expand" role="button" tabindex="0">
         <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-expand"/></svg></div>
         ${STRINGS.expandDay}
@@ -1165,8 +1138,7 @@ function openQuickActions(dateKey) {
 function handleQuickAction(action, dateKey, date) {
   switch (action) {
     case 'event':    openAddEventModal(dateKey); break;
-    case 'todo':     openAddEventModal(dateKey, { type: 'todo',     title: '', time: null, notes: '', done: false, reminderMinutes: null }); break;
-    case 'reminder': openAddEventModal(dateKey, { type: 'reminder', title: '', time: null, notes: '', done: false, reminderMinutes: null }); break;
+    case 'todo':     openAddEventModal(dateKey, { type: 'todo', title: '', time: null, notes: '', done: false, reminderMinutes: null }); break;
     case 'expand':   openExpandedDay(dateKey); break;
     case 'copy':     copyDayEntries(dateKey); break;
     case 'clear':
@@ -1310,7 +1282,12 @@ function openSettingsDropdown() {
     </div>
     <div class="settings-section">
       <div class="settings-row">
-        <div class="settings-label">Notifications</div>
+        <div>
+          <div class="settings-label">Notifications</div>
+          ${typeof Notification !== 'undefined' && Notification.permission === 'denied'
+            ? '<div class="settings-sublabel settings-sublabel--warn">Blocked by browser — allow in site settings</div>'
+            : ''}
+        </div>
         <div class="toggle-pill">
           <div class="toggle-pill-btn ${notifications  ? 'active' : ''}" data-notif="on">On</div>
           <div class="toggle-pill-btn ${!notifications ? 'active' : ''}" data-notif="off">Off</div>
@@ -1388,8 +1365,16 @@ function openSettingsDropdown() {
   });
 
   dropdown.querySelectorAll('[data-notif]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.data.settings.notifications = btn.dataset.notif === 'on';
+    btn.addEventListener('click', async () => {
+      const turningOn = btn.dataset.notif === 'on';
+      if (turningOn) {
+        const perm = await requestNotificationPermission();
+        if (perm === 'denied') {
+          showToast('Notifications blocked — allow in browser site settings');
+          return;
+        }
+      }
+      state.data.settings.notifications = turningOn;
       saveData();
       dropdown.querySelectorAll('[data-notif]').forEach(b => b.classList.toggle('active', b === btn));
     });
@@ -1542,13 +1527,15 @@ function renderAgendaList(filter) {
     return;
   }
 
-  const typeIcon = { event: 'icon-calendar', todo: 'icon-check', reminder: 'icon-bell' };
+  const typeIcon = { event: 'icon-calendar', todo: 'icon-check' };
 
   list.innerHTML = items.map(({ dateKey, evt }) => {
     const date     = parseDate(dateKey);
     const dateStr  = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
     const doneClass = evt.done ? 'agenda-item__title--done' : '';
     const icon     = typeIcon[evt.type] ?? 'icon-calendar';
+    const bellIcon = evt.reminderMinutes != null
+      ? `<span class="agenda-item__bell" aria-label="Reminder set">🔔</span>` : '';
     const todoBtn  = evt.type === 'todo'
       ? `<button class="agenda-todo-check ${evt.done ? 'checked' : ''}"
                  data-todo-toggle="${esc(evt.id)}"
@@ -1560,8 +1547,8 @@ function renderAgendaList(filter) {
           <svg class="icon"><use href="assets/icons.svg#${icon}"/></svg>
         </div>
         <div class="agenda-item__body">
-          <div class="agenda-item__title ${doneClass}">${esc(evt.title)}</div>
-          <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}</div>
+          <div class="agenda-item__title ${doneClass}">${evt.title}</div>
+          <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}${bellIcon}</div>
         </div>
         ${todoBtn}
         <svg class="icon agenda-item__chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1812,12 +1799,13 @@ function searchAll(query) {
     // Events / todos / reminders
     if (day.events) {
       for (const ev of day.events) {
-        const hay = (ev.title + ' ' + (ev.notes || '')).toLowerCase();
+        const titleText = stripHTML(ev.title);
+        const hay = (titleText + ' ' + (ev.notes || '')).toLowerCase();
         if (hay.includes(q)) {
           out.push({
             dateKey,
-            type: ev.type, // event | todo | reminder
-            snippet: makeSnippet(ev.title + ' ' + (ev.notes || ''), q),
+            type: ev.type, // event | todo
+            snippet: makeSnippet(titleText + ' ' + (ev.notes || ''), q),
             eventId: ev.id
           });
         }
@@ -1902,7 +1890,6 @@ function formatType(t) {
   switch (t) {
     case 'event':    return 'Event';
     case 'todo':     return 'Todo';
-    case 'reminder': return 'Reminder';
     case 'diary':    return 'Diary';
     default:         return t;
   }
@@ -1959,7 +1946,9 @@ function scheduleNextDayRefresh() {
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
   setTimeout(() => {
     state.today = new Date(); state.today.setHours(0, 0, 0, 0);
-    renderWeekGrid(); scheduleNextDayRefresh();
+    renderWeekGrid();
+    scheduleReminders(state.data);
+    scheduleNextDayRefresh();
   }, tomorrow - now);
 }
 
@@ -1972,6 +1961,7 @@ function init() {
   state.currentWeekStart = getWeekStart(state.today, state.data.settings.weekStart);
 
   applyTheme(state.data.settings.theme);
+  scheduleReminders(state.data);
   initFormatToolbar(); // global format toolbar singleton (Fix 4)
 
   registerDirtyCallback(dirty => {
@@ -2010,15 +2000,75 @@ function init() {
     onLongPress: dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
   });
 
-  // ── Delegated: todo toggle ──
+  // ── Delegated: todo checkbox toggle ──
   weekGrid.addEventListener('click', e => {
-    const item = e.target.closest('.todo-item[data-todo-id]');
+    const checkbox = e.target.closest('.todo-checkbox');
+    if (!checkbox) return;
+    const item = checkbox.closest('.todo-item[data-todo-id]');
     if (!item) return;
     e.stopPropagation();
     pushUndo(JSON.parse(JSON.stringify(state.data)));
     toggleTodo(state.data, item.dataset.date, item.dataset.todoId);
     saveData();
     refreshCardEvents(item.dataset.date);
+  });
+
+  // ── Delegated: todo label → inline detail popup ──
+  weekGrid.addEventListener('click', e => {
+    const label = e.target.closest('.todo-label');
+    if (!label) return;
+    const item = label.closest('.todo-item[data-todo-id]');
+    if (!item) return;
+    e.stopPropagation();
+
+    const dateKey = item.dataset.date;
+    const todoId  = item.dataset.todoId;
+    const strip   = item.closest('.events-strip');
+    if (!strip) return;
+
+    const existing    = strip.querySelector('.event-detail');
+    const wasThisItem = existing?.dataset.forId === todoId;
+    strip.querySelectorAll('.event-pill--active').forEach(p => p.classList.remove('event-pill--active'));
+    existing?.remove();
+    if (wasThisItem) return;
+
+    const evt = getEventsForDate(state.data, dateKey).find(ev => ev.id === todoId);
+    if (!evt) return;
+
+    const detail = document.createElement('div');
+    detail.className    = 'event-detail';
+    detail.dataset.forId = todoId;
+    detail.innerHTML = `
+      <div class="event-detail__title">${evt.title}</div>
+      ${evt.time  ? `<div class="event-detail__time">${esc(evt.time)}</div>`   : ''}
+      ${evt.notes ? `<div class="event-detail__notes">${esc(evt.notes)}</div>` : ''}
+      <div class="event-detail__actions">
+        <button class="event-detail__btn event-detail__edit">Edit</button>
+        <button class="event-detail__btn event-detail__delete">Delete</button>
+      </div>
+    `;
+    item.insertAdjacentElement('afterend', detail);
+
+    detail.querySelector('.event-detail__edit').addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (evt.isOccurrence && evt.seriesId) {
+        openRepeatActionSheet(evt, dateKey, 'edit');
+      } else {
+        openAddEventModal(dateKey, evt);
+      }
+    });
+
+    detail.querySelector('.event-detail__delete').addEventListener('click', ev => {
+      ev.stopPropagation();
+      pushUndo(JSON.parse(JSON.stringify(state.data)));
+      if (evt.isOccurrence && evt.seriesId) {
+        openRepeatActionSheet(evt, dateKey, 'delete');
+      } else {
+        deleteEvent(state.data, dateKey, todoId);
+        saveData();
+        refreshVisibleWeekCards();
+      }
+    });
   });
 
   // ── Delegated: event pill inline detail ──
@@ -2048,7 +2098,7 @@ function init() {
     detail.className = 'event-detail';
     detail.dataset.forId = eventId;
     detail.innerHTML = `
-      <div class="event-detail__title">${esc(evt.title)}</div>
+      <div class="event-detail__title">${evt.title}</div>
       ${evt.time  ? `<div class="event-detail__time">${esc(evt.time)}</div>`   : ''}
       ${evt.notes ? `<div class="event-detail__notes">${esc(evt.notes)}</div>` : ''}
       <div class="event-detail__actions">
@@ -2079,6 +2129,13 @@ function init() {
       }
     });
   });
+
+  // ── Click-away: close event-detail dropdown (capture phase so stopPropagation on pills doesn't block it) ──
+  document.addEventListener('click', e => {
+    if (e.target.closest('.event-detail') || e.target.closest('.event-pill') || e.target.closest('.todo-label')) return;
+    document.querySelectorAll('.event-detail').forEach(d => d.remove());
+    document.querySelectorAll('.event-pill--active').forEach(p => p.classList.remove('event-pill--active'));
+  }, true);
 
   // ── History API — back button / swipe-back closes any open overlay ──
   window.addEventListener('popstate', () => {

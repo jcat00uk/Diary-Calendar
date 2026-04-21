@@ -591,7 +591,7 @@ export function initFormatToolbar() {
   document.addEventListener('focusin', e => {
     const target = e.target;
     if (!target.isContentEditable) return;
-    if (!target.closest('.diary-area, .expanded-diary-area')) return;
+    if (!target.closest('.diary-area, .expanded-diary-area, .event-title-input')) return;
     _activeEditable = target;
     _toolbar.classList.add('visible');
     document.getElementById('weekContainer')?.classList.add('toolbar-open');

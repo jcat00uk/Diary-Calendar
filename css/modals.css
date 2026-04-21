@@ -64,6 +64,10 @@
   margin-top: 1px;
 }
 
+.settings-sublabel--warn {
+  color: var(--accent-amber-text);
+}
+
 .toggle-pill {
   display: flex;
   background: var(--bg-tertiary);
@@ -230,6 +234,19 @@
   resize: none;
   height: 60px;
   line-height: 1.5;
+}
+
+.event-title-input {
+  cursor: text;
+  min-height: 36px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.event-title-input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  pointer-events: none;
 }
 
 select.field-input {

@@ -96,10 +96,6 @@
   color: var(--accent-blue-text);
 }
 
-.event-pill--reminder {
-  background: var(--accent-amber-bg);
-  color: var(--accent-amber-text);
-}
 
 .event-pill-text {
   overflow: hidden;
@@ -123,7 +119,7 @@
   gap: 5px;
   font-size: 10px;
   padding: 1px 4px;
-  cursor: pointer;
+  cursor: default;
   border-radius: 3px;
 }
 
@@ -155,6 +151,7 @@
   min-width: 0;
   flex: 1;
   color: var(--accent-green-text);
+  cursor: pointer;
 }
 
 .todo-item--done .todo-label {

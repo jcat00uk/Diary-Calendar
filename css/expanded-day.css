@@ -169,7 +169,6 @@
 
 .expanded-event-dot--event   { background: var(--accent-blue-text); }
 .expanded-event-dot--todo    { background: var(--accent-green-text); }
-.expanded-event-dot--reminder { background: var(--accent-amber-text); }
 
 .expanded-event-content {
   flex: 1;
@@ -325,6 +324,37 @@
 .expanded-todo-item--done .expanded-todo-label {
   text-decoration: line-through;
   color: var(--text-tertiary);
+}
+
+.expanded-todo-label--tap {
+  cursor: pointer;
+}
+.expanded-todo-label--tap:active {
+  opacity: 0.6;
+}
+
+.expanded-todo-detail {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 0 4px 4px 36px;
+  font-size: 12px;
+}
+.expanded-todo-detail__title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.expanded-todo-detail__meta {
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  font-size: 11px;
+}
+.expanded-todo-detail__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .expanded-item-actions {
