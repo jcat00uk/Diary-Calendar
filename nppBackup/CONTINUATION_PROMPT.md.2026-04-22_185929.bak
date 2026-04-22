@@ -216,12 +216,3 @@ At the start of each new session, present the remaining Phase 2 list and ask:
 > "Which feature would you like to work on next?"
 
 Do not begin implementing until the user confirms their choice.
-
-
-----------
-clear all data doesn't clear todo/event repeat occurrences 
-undo/redo icons should be in the header ribbon b4 the search icon
-clear day doesn't delete repeat occurrences on that day
-expanded view has add item and add even which replicate function, remove add item
-todo/events should have a little indicator next to them if they are a recurring event
-

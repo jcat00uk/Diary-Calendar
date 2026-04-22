@@ -899,7 +899,17 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
     const r = existing.repeat;
 
     repeatSelect.value = r.freq;
-    repeatSelect.dispatchEvent(new Event('change'));
+
+    // Manually show/hide groups without firing the change event — firing it
+    // would trigger the auto-select logic before byWeekday is applied, adding
+    // a phantom weekday to the selection.
+    const show = r.freq !== '';
+    intervalGroup.classList.toggle('hidden', !show);
+    endGroup.classList.toggle('hidden', !show);
+    weekdaysGroup.classList.toggle('hidden', r.freq !== 'weekly');
+    intervalLabel.textContent =
+      r.freq === 'daily' ? 'days' : r.freq === 'weekly' ? 'weeks' :
+      r.freq === 'monthly' ? 'months' : 'years';
 
     intervalInput.value = r.interval;
 
@@ -1131,6 +1141,7 @@ function handleRepeatEdit(evt, dateKey, action) {
       time: series.time,
       notes: series.notes,
       reminderMinutes: series.reminderMinutes,
+      theme: series.theme || null,
       repeat: series.repeat,
     }, "series");
   }
