@@ -19,12 +19,13 @@ export function initGestures(el, callbacks) {
     startTarget = e.target;
     moved       = false;
 
+    const card = startTarget.closest('.day-card');
     longPressTimer = setTimeout(() => {
       if (moved) return;
-      const card = startTarget.closest('.day-card');
       if (card?.dataset.date) callbacks.onLongPress?.(card.dataset.date);
       startTarget = null;
     }, LONG_PRESS_MS);
+    if (card) card.classList.add('pressing');
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
@@ -35,16 +36,19 @@ export function initGestures(el, callbacks) {
     if (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX) {
       moved = true;
       clearTimeout(longPressTimer);
+      el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     }
   }, { passive: true });
 
   el.addEventListener('touchend', () => {
     clearTimeout(longPressTimer);
+    el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     startTarget = null;
   }, { passive: true });
 
   el.addEventListener('touchcancel', () => {
     clearTimeout(longPressTimer);
+    el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     startTarget = null;
   }, { passive: true });
 
@@ -67,6 +71,7 @@ export function initGestures(el, callbacks) {
     const onUp = () => cancel();
     const cancel = () => {
       clearTimeout(mouseTimer);
+      if (card) card.classList.remove('pressing');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup',   onUp);
     };
@@ -74,9 +79,10 @@ export function initGestures(el, callbacks) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onUp);
 
+    const card = target.closest('.day-card');
+    if (card) card.classList.add('pressing');
     mouseTimer = setTimeout(() => {
       cancel();
-      const card = target.closest('.day-card');
       if (card?.dataset.date) callbacks.onLongPress?.(card.dataset.date);
     }, LONG_PRESS_MS);
   });

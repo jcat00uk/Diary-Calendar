@@ -82,6 +82,18 @@ const STRINGS = {
 
 const STORAGE_KEY = 'chronicle_data';
 
+const EVENT_THEMES = {
+  birthday:    'Birthday',
+  work:        'Work',
+  holiday:     'Holiday',
+  personal:    'Personal',
+  appointment: 'Appointment',
+};
+
+function themePillClass(theme) {
+  return theme && EVENT_THEMES[theme] ? ` event-pill--theme-${theme}` : '';
+}
+
 // ── App state ──────────────────────────────────────────────────────────────
 
 const state = {
@@ -297,7 +309,7 @@ function buildCardHTML(date, dateKey) {
     const timeStr = evt.time ? `${evt.time} ` : '';
     const bell    = evt.reminderMinutes != null
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
-    return `<div class="event-pill event-pill--${esc(evt.type)}"
+    return `<div class="event-pill event-pill--${esc(evt.type)}${themePillClass(evt.theme)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
       <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
@@ -310,7 +322,7 @@ function buildCardHTML(date, dateKey) {
   return `
     <div class="day-header">
       <span class="day-name">${getDayName(date)}</span>
-      <span class="day-number">${date.getDate()}</span>
+      <span class="day-number">${date.getDate()}<span class="day-month-abbr"> ${date.toLocaleString('default',{month:'short'})}</span></span>
     </div>
     ${holidayHTML}
     <div class="events-strip">${itemsHTML}${moreHTML}</div>
@@ -340,7 +352,7 @@ function refreshCardEvents(dateKey) {
     const timeStr = evt.time ? `${evt.time} ` : '';
     const bell    = evt.reminderMinutes != null
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
-    return `<div class="event-pill event-pill--${esc(evt.type)}"
+    return `<div class="event-pill event-pill--${esc(evt.type)}${themePillClass(evt.theme)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
       <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
@@ -533,8 +545,9 @@ function renderExpandedEvents(overlay, dateKey) {
 
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
+        const expandedTheme = evt.theme && EVENT_THEMES[evt.theme] ? ` expanded-event-item--theme-${evt.theme}` : '';
         return `
-          <div class="expanded-event-item" data-id="${esc(evt.id)}">
+          <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
             <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
             <div class="expanded-event-content">
               <div class="expanded-event-title">${evt.title}</div>
@@ -617,6 +630,7 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   const time   = existing?.time  ?? '';
   const notes  = existing?.notes ?? '';
   const reminder = existing?.reminderMinutes ?? '';
+  const theme  = existing?.theme ?? '';
   const reminderPresets  = [0, 15, 60, 1440, 10080];
   const isCustomReminder = reminder !== '' && !reminderPresets.includes(reminder);
   const customDays       = isCustomReminder ? Math.round(reminder / 1440) : '';
@@ -645,6 +659,16 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
         <div class="field-input event-title-input" id="evtTitle"
              contenteditable="true" role="textbox" spellcheck="true"
              data-placeholder="Entry title" aria-label="Entry title"></div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="evtTheme">Theme</label>
+        <select class="field-input" id="evtTheme">
+          <option value="">None</option>
+          ${Object.entries(EVENT_THEMES).map(([k,v]) =>
+            `<option value="${k}" ${theme === k ? 'selected' : ''}>${v}</option>`
+          ).join('')}
+        </select>
       </div>
 
       <div class="field-group">
@@ -868,6 +892,7 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
     const dateVal = sheet.querySelector('#evtDate').value || dateKey;
     const timeVal = sheet.querySelector('#evtTime').value;
     const notesVal = sheet.querySelector('#evtNotes').value;
+    const themeVal = sheet.querySelector('#evtTheme').value || null;
     const reminderRaw = sheet.querySelector('#evtReminder').value;
     const reminderVal = reminderRaw === ''       ? null
                       : reminderRaw === 'custom' ? ((Number(sheet.querySelector('#evtReminderCustom').value) || 0) * 1440 || null)
@@ -908,6 +933,7 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
         time: timeVal || null,
         notes: notesVal,
         reminderMinutes: reminderVal,
+        theme: themeVal,
         repeat,
       });
     } else if (isEdit && editMode === 'exception') {
@@ -921,6 +947,7 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
           time: timeVal || null,
           notes: notesVal,
           reminderMinutes: reminderVal,
+          theme: themeVal,
           modified: Date.now(),
         };
       }
@@ -931,6 +958,7 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
         time: timeVal || null,
         notes: notesVal,
         reminderMinutes: reminderVal,
+        theme: themeVal,
         repeat,
       });
     } else {
@@ -940,6 +968,7 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
         time: timeVal || null,
         notes: notesVal,
         reminderMinutes: reminderVal,
+        theme: themeVal,
         repeat,
       });
     }
@@ -1672,6 +1701,7 @@ function renderAgendaList(filter) {
     const date     = parseDate(dateKey);
     const dateStr  = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
     const doneClass = evt.done ? 'agenda-item__title--done' : '';
+    const agendaTheme = evt.theme && EVENT_THEMES[evt.theme] ? ` agenda-item--theme-${evt.theme}` : '';
     const icon     = typeIcon[evt.type] ?? 'icon-calendar';
     const bellIcon = evt.reminderMinutes != null
       ? `<span class="agenda-item__bell" aria-label="Reminder set">🔔</span>` : '';
@@ -1681,7 +1711,7 @@ function renderAgendaList(filter) {
                  aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">${evt.done ? '✓' : ''}</button>`
       : '';
     return `
-      <div class="agenda-item" data-date="${esc(dateKey)}" data-id="${esc(evt.id)}">
+      <div class="agenda-item${agendaTheme}" data-date="${esc(dateKey)}" data-id="${esc(evt.id)}">
         <div class="agenda-item__icon agenda-item__icon--${esc(evt.type)}">
           <svg class="icon"><use href="assets/icons.svg#${icon}"/></svg>
         </div>

@@ -28,6 +28,7 @@ export function addEvent(data, dateKey, eventData) {
       time: eventData.time,
       notes: eventData.notes,
       reminderMinutes: eventData.reminderMinutes,
+      theme: eventData.theme || null,
       startDate: dateKey,
       repeat: eventData.repeat,
     });
@@ -41,6 +42,7 @@ export function addEvent(data, dateKey, eventData) {
     done: false,
     repeat: eventData.repeat || null,
     notes: eventData.notes || '',
+    theme: eventData.theme || null,
     created: Date.now(),
     modified: Date.now(),
   };
@@ -143,6 +145,7 @@ export function addSeries(data, seriesData) {
     repeat: seriesData.repeat,           // validated repeat rule
     notes: seriesData.notes || '',
     reminderMinutes: seriesData.reminderMinutes ?? null,
+    theme: seriesData.theme || null,
     exceptions: {},                      // dateKey → override or null
     created: Date.now(),
     modified: Date.now(),
@@ -235,6 +238,7 @@ function buildOccurrence(series, dateKey) {
     time: series.time,
     notes: series.notes,
     reminderMinutes: series.reminderMinutes,
+    theme: series.theme || null,
     date: dateKey,
     isOccurrence: true
   };

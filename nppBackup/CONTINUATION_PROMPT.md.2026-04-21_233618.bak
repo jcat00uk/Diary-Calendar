@@ -380,8 +380,6 @@ P2-6: iCal / .ics Export
 In handleSettingsAction('export') offer second option: "Export iCal (.ics)"
 Build .ics string with proper VEVENT blocks (DTSTART, DTEND, SUMMARY, UID)
 Include recurring series as RRULE lines
-
-
 P2-7: Google Calendar Sync
 
 OAuth 2.0 PKCE flow (web app, no backend)
@@ -393,7 +391,6 @@ P2-9: Mood Tags
 Emoji mood selector (😊 😐 😔 😤 😴) in expanded day view
 Stored as days[dateKey].mood
 Small mood indicator on day card
-
 P2-10: Custom In-Page Colour Picker (Text Colour)
 
 Replace <input type="color"> (broken on Android) with canvas-based HSV picker
@@ -413,84 +410,4 @@ Always esc(str) before inserting user content into innerHTML
 Gestures use touch events (mobile) + mousedown (desktop) — no pointer events at grid level
 Format toolbar is a singleton attached to document.body
 refreshVisibleWeekCards() — call after any series change to refresh all 7 visible card strips
-Session start instruction: Present the remaining Phase 2 list above and ask which feature to work on. Do not begin implementing until confirmed.
-
-
---------------------------------------------
-
-Chronicle — Continuation Prompt
-Project: Personal diary/calendar PWA. Vanilla JS (ES modules), HTML5, CSS3. No framework, no build step.
-Location: s:\Coding\Diary Calendar\
-
-index.html
-js/
-app.js        — state, rendering, modals, navigation
-calendar.js   — date math helpers
-diary.js      — diary contenteditable, autosave, format toolbar
-events.js     — add/update/delete/toggle, series (recurring), occurrence generation
-gestures.js   — long-press (touch + mouse)
-holidays.js   — UK bank holidays computation (England & Wales), Easter algorithm
-ical.js       — iCal (.ics) export builder
-notifications.js — Web Notifications API scheduling
-sync.js       — dirty-flag / Google Drive stub
-undo.js       — undo/redo stack
-css/
-base.css, ribbon.css, week-view.css, day-card.css,
-expanded-day.css, modals.css, agenda.css, responsive.css
-assets/icons.svg
-
-Phase 1 — Complete
-Week grid, day cards, navigation, long-press quick actions, expanded day overlay, format toolbar (bold/italic/underline/highlight/text colour), add-event modal, settings dropdown, agenda panel, date picker, back-button history API, undo/redo, dark mode, midnight refresh, localStorage persistence.
-
-Phase 2 — Complete
-P2-3 Full-Text Search — diary + events, grouped results, tap navigates to week + expanded day
-P2-4 Repeat Events — daily/weekly/monthly/yearly with interval, end by date/count/never, per-occurrence exceptions, edit/delete single or entire series
-P2-8 Day Navigation in Expanded View — 20px vertical side bars; navigating replaces history entry so Back always returns to week grid
-P2-10 Custom In-Page Colour Picker — HSV canvas + hue bar + hex input + Apply/Cancel
-P2-5 System Notifications — scheduleReminders() clears/re-registers setTimeouts for events/todos with reminderMinutes within next 24h
-P2-6 iCal Export — export all events + recurring series as .ics (VEVENT + RRULE); Settings → "Export iCal (.ics)"
-P2-1 UK Bank Holidays — holidays.js computes England & Wales bank holidays algorithmically (no hardcoded list); amber badge on day cards; amber banner in expanded view; Settings toggle On/Off + "Manage bank holidays" modal (per-holiday show/hide, grouped by year, current + next 2 years); stored in data.settings.holidays = { enabled, hidden[] }
-
-Phase 2 — Remaining (pick one to work on)
-
-P2-2: Colour Themes
-Extend theme setting beyond light/dark to named colour themes (blue, warm, high-contrast)
-CSS variable overrides per theme in base.css (body.theme-blue { --day-card-bg: …; })
-Theme picker in settings (colour swatch row) — replaces current Light/Dark toggle pill
-
-P2-9: Mood Tags
-Emoji mood selector in expanded day view
-Stored as days[dateKey].mood
-Small mood indicator on day card
-
-P2-7: Google Calendar Sync
-OAuth 2.0 PKCE flow (web app, no backend)
-Two-way sync events to/from Google Calendar
-Recurring series need RRULE mapping both directions
-Scaffold auth flow first
-
-P2-GD: Google Drive Backup
-OAuth 2.0 PKCE flow (web app, no backend) — shares auth infrastructure with P2-7
-Read/write a single JSON file to user's Drive (completes the existing dirty-flag stub in sync.js)
-Show last-sync time in settings (UI stub already exists)
-User has existing OAuth code from a previous project to reference
-Simpler than Calendar sync — do this before P2-7
-
-Key Patterns & Conventions
-
-No build step — plain ES modules
-State in app.js: state.data, state.today, state.currentWeekStart
-Save = saveData() → localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data))
-Recurring events live in state.data.series[]; virtual occurrences generated on-the-fly by generateOccurrencesForSeries() in events.js
-Modals push history.pushState on open; close via history.back() → popstate handler
-Event/todo titles stored as HTML; always render with evt.title directly; strip with stripHTML() before search/export
-Comments only for non-obvious WHY
-No emojis in UI text
-CSS variables everywhere (base.css :root + body.dark)
-Always esc(str) before inserting user content into innerHTML — EXCEPT evt.title (already safe HTML)
-Format toolbar is a singleton attached to document.body; activates on .diary-area, .expanded-diary-area, and .event-title-input
-refreshVisibleWeekCards() only refreshes the events-strip; call renderWeekGrid() when badges or structural card content needs updating
-Bottom sheets use history.pushState + popstate listener for close; follow the pattern in openHolidaysModal() in app.js
-Holiday data: data.settings.holidays = { enabled: bool, hidden: string[] } — not stored as events
-
 Session start instruction: Present the remaining Phase 2 list above and ask which feature to work on. Do not begin implementing until confirmed.

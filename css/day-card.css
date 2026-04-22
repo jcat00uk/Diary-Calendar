@@ -29,6 +29,10 @@
   background: var(--bg-secondary);
 }
 
+.day-card.pressing .day-header {
+  filter: brightness(0.80);
+}
+
 /* ── Day header ─────────────────────────────────────────── */
 
 .day-header {
@@ -38,6 +42,19 @@
   padding: 6px 8px 5px;
   border-bottom: 0.5px solid var(--day-card-border);
   flex-shrink: 0;
+  background: var(--day-header-bg);
+  transition: filter 0.12s;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.day-card:active .day-header {
+  filter: brightness(0.88);
+}
+
+.day-card--weekend .day-header {
+  background: var(--day-header-bg-weekend);
 }
 
 .day-name {
@@ -52,6 +69,13 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
+}
+
+.day-month-abbr {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.75;
+  margin-left: 1px;
 }
 
 .day-card--today .day-name,
@@ -85,6 +109,8 @@
   max-width: 100%;
   min-width: 0;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .event-pill:active {
@@ -95,6 +121,13 @@
   background: var(--accent-blue-bg);
   color: var(--accent-blue-text);
 }
+
+/* Event theme overrides — two-class selector beats single-class type */
+.event-pill.event-pill--theme-birthday    { background: var(--theme-birthday-bg);    color: var(--theme-birthday-text); }
+.event-pill.event-pill--theme-work        { background: var(--theme-work-bg);        color: var(--theme-work-text); }
+.event-pill.event-pill--theme-holiday     { background: var(--theme-holiday-bg);     color: var(--theme-holiday-text); }
+.event-pill.event-pill--theme-personal    { background: var(--theme-personal-bg);    color: var(--theme-personal-text); }
+.event-pill.event-pill--theme-appointment { background: var(--theme-appointment-bg); color: var(--theme-appointment-text); }
 
 
 .event-pill-text {
@@ -109,6 +142,8 @@
   font-size: 10px;
   color: var(--text-tertiary);
   padding: 1px 5px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Todo checkboxes (inline in events strip) ───────────── */
@@ -121,6 +156,8 @@
   padding: 1px 4px;
   cursor: default;
   border-radius: 3px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .todo-item:active {
@@ -226,6 +263,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Diary area — lined paper, internal scroll ──────────── */
