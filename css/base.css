@@ -42,12 +42,6 @@
   --day-header-bg: #cfdff2;
   --day-header-bg-weekend: #d5e4f0;
 
-  /* Event themes */
-  --theme-birthday-bg:    #fce7f5; --theme-birthday-text:    #7a1060;
-  --theme-work-bg:        #e7edfc; --theme-work-text:        #1a3488;
-  --theme-holiday-bg:     #e7f5ed; --theme-holiday-text:     #1a6640;
-  --theme-personal-bg:    #f0e7fc; --theme-personal-text:    #521a88;
-  --theme-appointment-bg: #fdf3e7; --theme-appointment-text: #884a1a;
 }
 
 body.dark {
@@ -64,13 +58,6 @@ body.dark {
   --day-card-border: rgba(55,138,221,0.15);
   --day-header-bg: #1e2d42;
   --day-header-bg-weekend: #1a2840;
-
-  /* Event themes — dark */
-  --theme-birthday-bg:    #3d1030; --theme-birthday-text:    #f0a0d8;
-  --theme-work-bg:        #0d2040; --theme-work-text:        #a0b4f0;
-  --theme-holiday-bg:     #0d3020; --theme-holiday-text:     #a0d8b4;
-  --theme-personal-bg:    #240d40; --theme-personal-text:    #c0a0f0;
-  --theme-appointment-bg: #3d2010; --theme-appointment-text: #f0c0a0;
 }
 
 html {

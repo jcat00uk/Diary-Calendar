@@ -20,11 +20,13 @@ import {
 } from './events.js'
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
 import { initGestures } from './gestures.js';
-import { pushUndo, undo, redo } from './undo.js';
+import { pushUndo, undo, redo, canUndo, canRedo } from './undo.js';
 import { markDirty, registerDirtyCallback } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
 import { getAllHolidays, ensureHolidaySettings, getHolidayForDate } from './holidays.js';
+import { BUILTIN_UI_THEMES, applyUITheme, injectEventThemeCSS, getEffectiveEventThemes } from './themes.js';
+import { openThemeEditor, closeThemeEditor, isThemeEditorOpen } from './themeEditor.js';
 
 
 
@@ -91,7 +93,7 @@ const EVENT_THEMES = {
 };
 
 function themePillClass(theme) {
-  return theme && EVENT_THEMES[theme] ? ` event-pill--theme-${theme}` : '';
+  return theme ? ` event-pill--theme-${theme}` : '';
 }
 
 // ── App state ──────────────────────────────────────────────────────────────
@@ -119,6 +121,12 @@ function loadData() {
   }
   if (!data.series) data.series = [];
   ensureHolidaySettings(data);
+  // Ensure theme settings exist
+  if (!data.settings.uiTheme)             data.settings.uiTheme = 'default';
+  if (!data.settings.uiThemeCustomVars)   data.settings.uiThemeCustomVars = { light: {}, dark: {} };
+  if (!data.settings.customUIThemes)      data.settings.customUIThemes = [];
+  if (!data.settings.eventThemeOverrides) data.settings.eventThemeOverrides = {};
+  if (!data.settings.customEventThemes)   data.settings.customEventThemes = [];
   // Migrate legacy 'reminder' type entries to 'event'
   for (const day of Object.values(data.days || {})) {
     for (const evt of (day.events || [])) {
@@ -139,14 +147,19 @@ function buildDefaultData() {
   return {
     version: 1,
     settings: {
-      weekStart:        'mon',
-      theme:            'light',
-      notifications:    true,
-      fyStartMonth:     3,
-      fyStartDay:       6,
-      agendaBeforeDays: 14,
-      agendaAheadDays:  60,
-      gdrive: { enabled: false, lastSync: null },
+      weekStart:           'mon',
+      theme:               'light',
+      notifications:       true,
+      fyStartMonth:        3,
+      fyStartDay:          6,
+      agendaBeforeDays:    14,
+      agendaAheadDays:     60,
+      gdrive:              { enabled: false, lastSync: null },
+      uiTheme:             'default',
+      uiThemeCustomVars:   { light: {}, dark: {} },
+      customUIThemes:      [],
+      eventThemeOverrides: {},
+      customEventThemes:   [],
     },
     days:   {},
     series: [],
@@ -168,7 +181,9 @@ function ensureDay(dateKey) {
 // ── Theme ──────────────────────────────────────────────────────────────────
 
 function applyTheme(theme) {
-  document.body.classList.toggle('dark', theme === 'dark');
+  state.data.settings.theme = theme;
+  applyUITheme(state.data.settings);
+  injectEventThemeCSS(state.data.settings);
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
@@ -300,7 +315,8 @@ function buildCardHTML(date, dateKey) {
 
   const itemsHTML = shown.map(evt => {
     if (evt.type === 'todo') {
-      return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}"
+      const todoTheme = evt.theme ? ` todo-item--theme-${esc(evt.theme)}` : '';
+      return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}${todoTheme}"
                    data-todo-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
         <span class="todo-checkbox">${evt.done ? '&#10003;' : ''}</span>
         <span class="todo-label">${evt.title}</span>
@@ -343,7 +359,8 @@ function refreshCardEvents(dateKey) {
 
   strip.innerHTML = shown.map(evt => {
     if (evt.type === 'todo') {
-      return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}"
+      const todoTheme = evt.theme ? ` todo-item--theme-${esc(evt.theme)}` : '';
+      return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}${todoTheme}"
                    data-todo-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
         <span class="todo-checkbox">${evt.done ? '&#10003;' : ''}</span>
         <span class="todo-label">${evt.title}</span>
@@ -545,7 +562,7 @@ function renderExpandedEvents(overlay, dateKey) {
 
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
-        const expandedTheme = evt.theme && EVENT_THEMES[evt.theme] ? ` expanded-event-item--theme-${evt.theme}` : '';
+        const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
         return `
           <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
             <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
@@ -580,6 +597,7 @@ function renderExpandedEvents(overlay, dateKey) {
       e.stopPropagation();
       const evtToDel = events.find(ev => ev.id === btn.dataset.delete);
       if (!evtToDel) return;
+      if (!confirm(`Delete "${evtToDel.title}"?`)) return;
       pushUndo(JSON.parse(JSON.stringify(state.data)));
       if (evtToDel.isOccurrence && evtToDel.seriesId) {
         openRepeatActionSheet(evtToDel, dateKey, 'delete');
@@ -624,7 +642,7 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   closeAddEventModal();
   history.pushState({ chronicle: 'modal', modal: 'addEvent' }, '');
 
-  const isEdit = !!existing;
+  const isEdit = !!existing?.id;
   const type   = existing?.type  ?? 'event';
   const title  = existing?.title ?? '';
   const time   = existing?.time  ?? '';
@@ -662,13 +680,11 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
       </div>
 
       <div class="field-group">
-        <label class="field-label" for="evtTheme">Theme</label>
-        <select class="field-input" id="evtTheme">
-          <option value="">None</option>
-          ${Object.entries(EVENT_THEMES).map(([k,v]) =>
-            `<option value="${k}" ${theme === k ? 'selected' : ''}>${v}</option>`
-          ).join('')}
-        </select>
+        <label class="field-label">Theme</label>
+        <input type="hidden" id="evtTheme" value="${esc(theme)}">
+        <div class="evt-theme-pills" id="evtThemePills">
+          <button type="button" class="evt-theme-pill${!theme ? ' active' : ''}" data-theme="">None</button>
+        </div>
       </div>
 
       <div class="field-group">
@@ -786,6 +802,50 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   titleEl.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); }
   });
+
+  // ── Theme pill selector ──────────────────────────────────────────────────
+  const evtThemeInput = sheet.querySelector('#evtTheme');
+  const pillsContainer = sheet.querySelector('#evtThemePills');
+  const effectiveThemes = getEffectiveEventThemes(state.data.settings);
+
+  effectiveThemes.forEach(t => {
+    const isDark = state.data.settings.theme === 'dark';
+    const bg   = isDark ? t.dark.bg   : t.light.bg;
+    const text = isDark ? t.dark.text : t.light.text;
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'evt-theme-pill' + (theme === t.id ? ' active' : '');
+    pill.dataset.theme = t.id;
+    pill.textContent = t.name;
+    pill.style.cssText = `background:${bg};color:${text};`;
+    pillsContainer.appendChild(pill);
+  });
+
+  const updateTitleTheme = () => {
+    const sel = evtThemeInput.value;
+    if (!sel) {
+      titleEl.style.background = '';
+      titleEl.style.color = '';
+    } else {
+      const t = effectiveThemes.find(x => x.id === sel);
+      if (t) {
+        const isDark = state.data.settings.theme === 'dark';
+        titleEl.style.background = isDark ? t.dark.bg : t.light.bg;
+        titleEl.style.color      = isDark ? t.dark.text : t.light.text;
+      }
+    }
+  };
+
+  pillsContainer.addEventListener('click', e => {
+    const pill = e.target.closest('.evt-theme-pill');
+    if (!pill) return;
+    evtThemeInput.value = pill.dataset.theme;
+    pillsContainer.querySelectorAll('.evt-theme-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    updateTitleTheme();
+  });
+
+  updateTitleTheme();
 
   // -----------------------------
   // REPEAT UI JS (correct place)
@@ -1149,6 +1209,14 @@ function openQuickActions(dateKey) {
         <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-trash"/></svg></div>
         ${STRINGS.clearDay}
       </div>
+      <div class="quick-action-item${canUndo() ? '' : ' quick-action-item--disabled'}" data-action="undo" role="button" tabindex="0">
+        <div class="quick-action-icon" style="font-size:16px;">↩</div>
+        Undo
+      </div>
+      <div class="quick-action-item${canRedo() ? '' : ' quick-action-item--disabled'}" data-action="redo" role="button" tabindex="0">
+        <div class="quick-action-icon" style="font-size:16px;">↪</div>
+        Redo
+      </div>
     </div>
   `;
 
@@ -1191,6 +1259,8 @@ function handleQuickAction(action, dateKey, date) {
         renderWeekGrid();
       }
       break;
+    case 'undo': handleUndo(); break;
+    case 'redo': handleRedo(); break;
   }
 }
 
@@ -1257,6 +1327,24 @@ function openSettingsDropdown() {
     `<option value="${i}" ${i === fyStartMonth ? 'selected' : ''}>${n.slice(0,3)}</option>`
   ).join('');
 
+  const { uiTheme = 'default', customUIThemes = [], uiThemeCustomVars = {} } = state.data.settings;
+  const isDarkMode = state.data.settings.theme === 'dark';
+  const allUIThemes = [...BUILTIN_UI_THEMES, ...customUIThemes];
+  const swatchRowHTML = `
+    <div class="te-swatch-row" style="padding:4px 0 2px">
+      ${allUIThemes.map(t => {
+        const modeVars = t.id === uiTheme
+          ? { ...t[isDarkMode ? 'dark' : 'light'], ...(uiThemeCustomVars[isDarkMode ? 'dark' : 'light'] || {}) }
+          : t[isDarkMode ? 'dark' : 'light'];
+        const swatchColor = modeVars['--day-header-bg'] || t.swatch || '#888';
+        return `<div class="te-swatch-mini ${t.id === uiTheme ? 'active' : ''}"
+             style="background:${swatchColor}"
+             data-swatch-theme="${t.id}"
+             title="${t.name}"></div>`;
+      }).join('')}
+    </div>
+  `;
+
   dropdown.innerHTML = `
     <div class="settings-section">
       <div class="settings-row">
@@ -1266,6 +1354,11 @@ function openSettingsDropdown() {
           <div class="toggle-pill-btn ${theme === 'dark'  ? 'active' : ''}" data-theme="dark">Dark</div>
         </div>
       </div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div class="settings-label">Colour theme</div>
+        ${swatchRowHTML}
+      </div>
+      <div class="settings-row" data-action="openThemeEditor"><span class="settings-action">Customise themes…</span></div>
       <div class="settings-row">
         <div class="settings-label">Week starts</div>
         <div class="toggle-pill">
@@ -1369,10 +1462,19 @@ function openSettingsDropdown() {
 
   dropdown.querySelectorAll('[data-theme]').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.data.settings.theme = btn.dataset.theme;
       applyTheme(btn.dataset.theme);
       saveData();
       dropdown.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  dropdown.querySelectorAll('[data-swatch-theme]').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      state.data.settings.uiTheme = swatch.dataset.swatchTheme;
+      state.data.settings.uiThemeCustomVars = { light: {}, dark: {} };
+      applyUITheme(state.data.settings);
+      saveData();
+      dropdown.querySelectorAll('[data-swatch-theme]').forEach(s => s.classList.toggle('active', s === swatch));
     });
   });
 
@@ -1457,9 +1559,10 @@ function openSettingsDropdown() {
 
 function handleSettingsAction(action) {
   switch (action) {
-    case 'export':          exportJSON();          break;
-    case 'exportIcal':      exportIcal();          break;
-    case 'manageHolidays':  openHolidaysModal();   break;
+    case 'export':           exportJSON();         break;
+    case 'exportIcal':       exportIcal();         break;
+    case 'manageHolidays':   openHolidaysModal();  break;
+    case 'openThemeEditor':  openThemeEditorUI();  break;
 
     case 'import': {
       const input = document.createElement('input');
@@ -1618,6 +1721,17 @@ function exportIcal() {
   showToast(STRINGS.exportICalDone);
 }
 
+function openThemeEditorUI() {
+  // Work on a live settings reference — themeEditor mutates it for live preview.
+  // On save it calls onSave; on cancel the editor reverts via its own snapshot.
+  openThemeEditor(state.data.settings, () => {
+    applyUITheme(state.data.settings);
+    injectEventThemeCSS(state.data.settings);
+    saveData();
+    renderWeekGrid();
+  });
+}
+
 function closeSettingsDropdown() {
   if (_settingsDropdown) {
     _settingsDropdown.classList.remove('open');
@@ -1701,7 +1815,7 @@ function renderAgendaList(filter) {
     const date     = parseDate(dateKey);
     const dateStr  = date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
     const doneClass = evt.done ? 'agenda-item__title--done' : '';
-    const agendaTheme = evt.theme && EVENT_THEMES[evt.theme] ? ` agenda-item--theme-${evt.theme}` : '';
+    const agendaTheme = evt.theme ? ` agenda-item--theme-${evt.theme}` : '';
     const icon     = typeIcon[evt.type] ?? 'icon-calendar';
     const bellIcon = evt.reminderMinutes != null
       ? `<span class="agenda-item__bell" aria-label="Reminder set">🔔</span>` : '';
@@ -2129,7 +2243,8 @@ function init() {
   state.today = new Date(); state.today.setHours(0, 0, 0, 0);
   state.currentWeekStart = getWeekStart(state.today, state.data.settings.weekStart);
 
-  applyTheme(state.data.settings.theme);
+  applyUITheme(state.data.settings);
+  injectEventThemeCSS(state.data.settings);
   scheduleReminders(state.data);
   initFormatToolbar(); // global format toolbar singleton (Fix 4)
 
@@ -2229,6 +2344,7 @@ function init() {
 
     detail.querySelector('.event-detail__delete').addEventListener('click', ev => {
       ev.stopPropagation();
+      if (!confirm(`Delete "${evt.title}"?`)) return;
       pushUndo(JSON.parse(JSON.stringify(state.data)));
       if (evt.isOccurrence && evt.seriesId) {
         openRepeatActionSheet(evt, dateKey, 'delete');
@@ -2288,6 +2404,7 @@ function init() {
 
     detail.querySelector('.event-detail__delete').addEventListener('click', ev => {
       ev.stopPropagation();
+      if (!confirm(`Delete "${evt.title}"?`)) return;
       pushUndo(JSON.parse(JSON.stringify(state.data)));
       if (evt.isOccurrence && evt.seriesId) {
         openRepeatActionSheet(evt, dateKey, 'delete');
@@ -2308,6 +2425,7 @@ function init() {
 
   // ── History API — back button / swipe-back closes any open overlay ──
   window.addEventListener('popstate', () => {
+    if (isThemeEditorOpen()) { closeThemeEditor();     return; }
     if (_expandedOverlay)  { closeExpandedDay();      return; }
     if (_addEventSheet)    { closeAddEventModal();     return; }
     if (_qaSheet)          { closeQuickActions();      return; }

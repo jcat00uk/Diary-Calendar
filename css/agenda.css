@@ -122,18 +122,6 @@
 .agenda-item__icon--todo     { background: rgba(52,199,89,0.12);  color: var(--accent-green-text); }
 .agenda-item__icon .icon     { width: 14px; height: 14px; }
 
-/* Event theme styles for agenda */
-.agenda-item--theme-birthday    .agenda-item__icon { background: var(--theme-birthday-bg);    color: var(--theme-birthday-text); }
-.agenda-item--theme-work        .agenda-item__icon { background: var(--theme-work-bg);        color: var(--theme-work-text); }
-.agenda-item--theme-holiday     .agenda-item__icon { background: var(--theme-holiday-bg);     color: var(--theme-holiday-text); }
-.agenda-item--theme-personal    .agenda-item__icon { background: var(--theme-personal-bg);    color: var(--theme-personal-text); }
-.agenda-item--theme-appointment .agenda-item__icon { background: var(--theme-appointment-bg); color: var(--theme-appointment-text); }
-
-.agenda-item--theme-birthday    .agenda-item__title { color: var(--theme-birthday-text); }
-.agenda-item--theme-work        .agenda-item__title { color: var(--theme-work-text); }
-.agenda-item--theme-holiday     .agenda-item__title { color: var(--theme-holiday-text); }
-.agenda-item--theme-personal    .agenda-item__title { color: var(--theme-personal-text); }
-.agenda-item--theme-appointment .agenda-item__title { color: var(--theme-appointment-text); }
 
 .agenda-todo-check {
   width: 22px;

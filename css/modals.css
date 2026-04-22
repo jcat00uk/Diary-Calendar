@@ -242,6 +242,8 @@
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+  transition: background 0.15s, color 0.15s;
+  border-radius: var(--radius-sm);
 }
 .event-title-input:empty::before {
   content: attr(data-placeholder);
@@ -255,6 +257,34 @@ select.field-input {
   background-position: right 10px center;
   padding-right: 30px;
 }
+
+/* ── Event theme pill selector ─────────────────────────── */
+
+.evt-theme-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.evt-theme-pill {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  transition: border-color 0.12s, transform 0.12s;
+  white-space: nowrap;
+}
+
+.evt-theme-pill.active {
+  border-color: var(--text-primary);
+  transform: scale(1.06);
+}
+
+.evt-theme-pill:active { opacity: 0.75; }
 
 /* Segmented control */
 .segmented-control {
@@ -311,6 +341,11 @@ select.field-input {
 
 .quick-action-item--destructive {
   color: #c0392b;
+}
+
+.quick-action-item--disabled {
+  opacity: 0.38;
+  pointer-events: none;
 }
 
 .quick-action-icon {

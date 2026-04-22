@@ -180,32 +180,6 @@
 .expanded-event-dot--event   { background: var(--accent-blue-text); }
 .expanded-event-dot--todo    { background: var(--accent-green-text); }
 
-/* Event theme styles for expanded view */
-.expanded-event-item--theme-birthday    { background: var(--theme-birthday-bg);    border-color: var(--theme-birthday-bg); }
-.expanded-event-item--theme-work        { background: var(--theme-work-bg);        border-color: var(--theme-work-bg); }
-.expanded-event-item--theme-holiday     { background: var(--theme-holiday-bg);     border-color: var(--theme-holiday-bg); }
-.expanded-event-item--theme-personal    { background: var(--theme-personal-bg);    border-color: var(--theme-personal-bg); }
-.expanded-event-item--theme-appointment { background: var(--theme-appointment-bg); border-color: var(--theme-appointment-bg); }
-
-.expanded-event-item--theme-birthday    .expanded-event-dot,
-.expanded-event-item--theme-birthday    .expanded-event-title { color: var(--theme-birthday-text); }
-.expanded-event-item--theme-birthday    .expanded-event-dot   { background: var(--theme-birthday-text); }
-
-.expanded-event-item--theme-work        .expanded-event-dot,
-.expanded-event-item--theme-work        .expanded-event-title { color: var(--theme-work-text); }
-.expanded-event-item--theme-work        .expanded-event-dot   { background: var(--theme-work-text); }
-
-.expanded-event-item--theme-holiday     .expanded-event-dot,
-.expanded-event-item--theme-holiday     .expanded-event-title { color: var(--theme-holiday-text); }
-.expanded-event-item--theme-holiday     .expanded-event-dot   { background: var(--theme-holiday-text); }
-
-.expanded-event-item--theme-personal    .expanded-event-dot,
-.expanded-event-item--theme-personal    .expanded-event-title { color: var(--theme-personal-text); }
-.expanded-event-item--theme-personal    .expanded-event-dot   { background: var(--theme-personal-text); }
-
-.expanded-event-item--theme-appointment .expanded-event-dot,
-.expanded-event-item--theme-appointment .expanded-event-title { color: var(--theme-appointment-text); }
-.expanded-event-item--theme-appointment .expanded-event-dot   { background: var(--theme-appointment-text); }
 
 .expanded-event-content {
   flex: 1;

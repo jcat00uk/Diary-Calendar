@@ -122,13 +122,6 @@
   color: var(--accent-blue-text);
 }
 
-/* Event theme overrides — two-class selector beats single-class type */
-.event-pill.event-pill--theme-birthday    { background: var(--theme-birthday-bg);    color: var(--theme-birthday-text); }
-.event-pill.event-pill--theme-work        { background: var(--theme-work-bg);        color: var(--theme-work-text); }
-.event-pill.event-pill--theme-holiday     { background: var(--theme-holiday-bg);     color: var(--theme-holiday-text); }
-.event-pill.event-pill--theme-personal    { background: var(--theme-personal-bg);    color: var(--theme-personal-text); }
-.event-pill.event-pill--theme-appointment { background: var(--theme-appointment-bg); color: var(--theme-appointment-text); }
-
 
 .event-pill-text {
   overflow: hidden;
