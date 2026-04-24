@@ -697,3 +697,130 @@ select.field-input {
     background: var(--bg-primary);
   }
 }
+
+/* ── Conflict modal ─────────────────────────────────────── */
+
+.conflict-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.conflict-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.conflict-card {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-modal);
+  width: 100%;
+  max-width: 300px;
+  padding: 20px 18px 14px;
+}
+
+.conflict-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.conflict-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.conflict-times {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 16px;
+}
+
+.conflict-time-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.conflict-time-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.conflict-time-val {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.conflict-btn {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.conflict-btn--secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 0.5px solid var(--color-border);
+}
+
+.conflict-btn--primary {
+  background: var(--today-border);
+  color: #fff;
+  border: none;
+}
+
+/* ── GDrive settings rows ───────────────────────────────── */
+
+.settings-row--col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.gdrive-cid-input {
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.settings-gdrive-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 0.5px solid var(--color-border-strong);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

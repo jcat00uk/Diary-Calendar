@@ -22,7 +22,12 @@ import {
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
 import { initGestures } from './gestures.js';
 import { pushUndo, undo, redo, canUndo, canRedo } from './undo.js';
-import { markDirty, registerDirtyCallback } from './sync.js';
+import {
+  markDirty, markClean,
+  registerDirtyCallback, registerStatusCallback,
+  gdriveState, initGoogleAuth, signIn, signOut,
+  syncNow, bgSync,
+} from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
 import { getAllHolidays, ensureHolidaySettings, getHolidayForDate } from './holidays.js';
@@ -171,6 +176,28 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
   markDirty();
   scheduleReminders(state.data);
+  bgSync(state.data, _applyRemoteData, _openConflict).catch(console.warn);
+}
+
+function _applyRemoteData(data) {
+  state.data = data;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  markClean();
+  applyUITheme(state.data.settings);
+  injectEventThemeCSS(state.data.settings);
+  renderWeekGrid();
+  scheduleReminders(state.data);
+}
+
+let _conflictCallbacks = null;
+
+function _openConflict(driveData, keepDrive, keepLocal) {
+  _conflictCallbacks = { keepDrive, keepLocal };
+  document.getElementById('conflictDriveTime').textContent =
+    new Date(driveData._lastModified || 0).toLocaleString();
+  document.getElementById('conflictLocalTime').textContent =
+    new Date(state.data._lastModified || 0).toLocaleString();
+  document.getElementById('conflictModal').classList.add('open');
 }
 
 function ensureDay(dateKey) {
@@ -1510,9 +1537,15 @@ function openSettingsDropdown() {
           </div>
           <div class="settings-row">
             <div>
-              <div class="settings-label">Google Drive</div>
+              <div class="settings-label">Google Drive Backup</div>
               <div class="settings-sublabel">${esc(lastSyncStr)}</div>
             </div>
+            ${gdriveState.userEmail
+              ? `<button class="settings-gdrive-btn" data-gdrive-action="signout">${esc(gdriveState.userEmail)}</button>`
+              : `<button class="settings-gdrive-btn" data-gdrive-action="signin">Sign in</button>`}
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">Background sync</div>
             <div class="toggle-pill">
               <div class="toggle-pill-btn ${gdrive.enabled  ? 'active' : ''}" data-gdrive="on">On</div>
               <div class="toggle-pill-btn ${!gdrive.enabled ? 'active' : ''}" data-gdrive="off">Off</div>
@@ -1595,6 +1628,13 @@ function openSettingsDropdown() {
       saveData();
       dropdown.querySelectorAll('[data-notif]').forEach(b => b.classList.toggle('active', b === btn));
     });
+  });
+
+  dropdown.querySelector('[data-gdrive-action]')?.addEventListener('click', e => {
+    const action = e.currentTarget.dataset.gdriveAction;
+    closeSettingsDropdown();
+    if (action === 'signin') signIn();
+    else signOut();
   });
 
   dropdown.querySelectorAll('[data-gdrive]').forEach(btn => {
@@ -2330,6 +2370,26 @@ function init() {
     if (badge) badge.hidden = !dirty;
   });
 
+  registerStatusCallback((status, info) => {
+    if (status === 'needs_client_id') {
+      openSettingsDropdown();
+      showToast('Paste your Google Client ID in Settings → Sync');
+    }
+  });
+
+  document.getElementById('conflictKeepDrive').addEventListener('click', async () => {
+    document.getElementById('conflictModal').classList.remove('open');
+    await _conflictCallbacks?.keepDrive();
+    _conflictCallbacks = null;
+  });
+  document.getElementById('conflictKeepLocal').addEventListener('click', async () => {
+    document.getElementById('conflictModal').classList.remove('open');
+    await _conflictCallbacks?.keepLocal();
+    _conflictCallbacks = null;
+  });
+
+  initGoogleAuth();
+
   renderWeekGrid();
 
   // ── Ribbon buttons ──
@@ -2337,7 +2397,9 @@ function init() {
   document.getElementById('btnJumpDate').addEventListener('click', openDatePicker);
   document.getElementById('btnSearch').addEventListener('click', openSearch);
   document.getElementById('btnAgenda').addEventListener('click', openAgendaPanel);
-  document.getElementById('btnSync').addEventListener('click', () => showToast(STRINGS.syncSoon));
+  document.getElementById('btnSync').addEventListener('click', () =>
+    syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn)
+  );
   document.getElementById('btnAdd').addEventListener('click', () => {
     openAddEventModal(_lastFocusedDate ?? formatDate(state.today));
   });

@@ -120,6 +120,29 @@
     <div class="agenda-list" id="agendaList"></div>
   </div>
 
+  <!-- ── Conflict modal ── -->
+  <div class="conflict-overlay" id="conflictModal">
+    <div class="conflict-card">
+      <div class="conflict-title">Sync conflict</div>
+      <p class="conflict-body">Drive and local data differ. Which version do you want to keep?</p>
+      <div class="conflict-times">
+        <div class="conflict-time-row">
+          <span class="conflict-time-label">Drive</span>
+          <span class="conflict-time-val" id="conflictDriveTime"></span>
+        </div>
+        <div class="conflict-time-row">
+          <span class="conflict-time-label">Local</span>
+          <span class="conflict-time-val" id="conflictLocalTime"></span>
+        </div>
+      </div>
+      <div class="conflict-actions">
+        <button class="conflict-btn conflict-btn--secondary" id="conflictKeepLocal">Keep local</button>
+        <button class="conflict-btn conflict-btn--primary"   id="conflictKeepDrive">Use Drive</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer onload="window._onGISLoad?.()"></script>
   <script type="module" src="js/app.js"></script>
 
 </body>
