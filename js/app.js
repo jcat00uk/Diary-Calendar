@@ -173,6 +173,7 @@ function buildDefaultData() {
 }
 
 function saveData() {
+  state.data._lastModified = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
   markDirty();
   scheduleReminders(state.data);
