@@ -1,0 +1,45 @@
+Chronicle — diary + calendar PWA. Vanilla JS ES modules, HTML, CSS. Mobile-first.
+
+Files:
+index.html
+js/: app.js, calendar.js, diary.js, events.js, gestures.js,
+     holidays.js, ical.js, notifications.js, sync.js,
+     themes.js, themeEditor.js, undo.js
+css/: base.css, ribbon.css, week-view.css, day-card.css,
+      expanded-day.css, modals.css, agenda.css, themes.css,
+      responsive.css
+assets/: icons.svg
+
+Theme system:
+data.settings stores uiTheme, uiThemeCustomVars, customUIThemes,
+eventThemeOverrides, customEventThemes.
+Always call applyUITheme() + injectEventThemeCSS() together.
+
+Conventions:
+ES modules, state in app.js, saveData() for persistence,
+modals use history API, esc() for user content,
+touch-first interactions, CSS variables everywhere.
+
+Bug fixes + UI updates:
+- Clear all data removes repeat occurrences
+- Clear day deletes repeat occurrences
+- Stabilise reminders
+- Move undo/redo to top of main menu
+- Remove Add Item (keep Add Event)
+- Add recurring indicator in weekly view, expanded view, agenda
+- Mobile settings menu: add vertical buffer + scrolling
+- Replace settings menu with grouped collapsible layout:
+  Appearance, Calendar, Data, Sync (chevrons, compact mobile spacing)
+- Navigation: Left/Right = week; Up/Down = month; Up/Down jumps to first week of month
+- Remove Google Photos, Attach Image, Mood Tag
+
+Remaining Phase 2:
+P2-GD Google Drive Backup
+P2-7 Google Calendar Sync
+
+Coding behaviour:
+Use diff-only output.
+No full file rewrites unless requested.
+Keep answers short unless I ask for detail.
+
+At session start, ask: “Which feature would you like to work on next?”

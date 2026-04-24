@@ -1,0 +1,77 @@
+on phase one , 
+
+1. there is no swipe left right up down, to change month or week, 
+
+
+
+
+
+on monday start of the week the sat and sunday should be as the image i posted , both half sized, at the moment the saturday is full size and the sunday is along the bottom,
+
+
+
+the text doesn't line up to the lines
+
+
+
+when i enter text in the day cell it expands vertically , it should be fixed, any extra should scroll,
+
+
+
+week 1 should default to start on 6th of april, this should be editable in the settings
+
+
+
+in the future there needs to be room for themes, but at the moment the days need to have a bg colour, 
+
+
+
+Allow coloured text,and bold.italic, underlined etc text in text entry
+
+
+
+Future function to copy/move/duplicate entries
+
+
+
+no save on full screen day input, 
+
+
+
+when adding reminders, todo#s etc keyboard blocks most of the entry boxes
+
+
+
+future fixes, even and todo should have a reminder option, 
+
+
+
+todos should create a todo list with tick boxes,
+
+
+
+when clicking on reminders todos ,events etc it should open /expand the details and have an edit button to allow to change,  
+
+
+
+there should be a menu icon than will load a list of events, remainders and todos that can be filtered
+
+
+
+future feature google calendar sync
+
+
+
+future feature add uk bank holidays, and special days eg christmas easter,
+
+
+
+swiping back/clicking the browser back button from the full page day view should go back  to the week view rather than exiting the calendar
+
+
+
+the main says of the week monday-friday should have the most vertical space shared equally, on (mon start of the week) with the sat sun each half the size of the friday ,
+
+
+
+on the sun start of the week, the sun should be as it is now 

@@ -1,0 +1,92 @@
+Project
+Chronicle — diary + calendar PWA. Vanilla JS (ES modules), HTML, CSS. Mobile‑first.
+
+Files
+Code
+index.html
+js/: app.js, calendar.js, diary.js, events.js, gestures.js,
+     holidays.js, ical.js, notifications.js, sync.js,
+     themes.js, themeEditor.js, undo.js
+css/: base.css, ribbon.css, week-view.css, day-card.css,
+      expanded-day.css, modals.css, agenda.css, themes.css,
+      responsive.css
+assets/: icons.svg
+Theme System (minimal required context)
+data.settings stores: uiTheme, uiThemeCustomVars, customUIThemes, eventThemeOverrides, customEventThemes.
+
+Built‑in UI themes + event themes exist in themes.js.
+
+Always call both applyUITheme(settings) and injectEventThemeCSS(settings) after changes.
+
+Theme editor: presets, UI colours, event themes; HSV picker; live preview; save/update/export.
+
+Core Conventions
+Plain ES modules, no build step
+
+State in app.js
+
+Save via saveData() → localStorage
+
+Modals use history API
+
+Event/todo titles stored as HTML
+
+Use esc() when inserting user content
+
+Touch‑first interactions
+
+refreshVisibleWeekCards() for event-strip updates
+
+Holiday data not stored as events
+
+No emojis in UI text
+
+CSS variables everywhere
+
+Bug Fixes + UI Updates (apply all)
+Code
+// fix: Clear all data must remove repeat occurrences
+// fix: Clear day must delete repeat occurrences on that day
+// fix: Reminders inconsistent — stabilise scheduling + display
+
+// move: Undo/Redo icons to top of main menu
+
+// remove: Add Item button in expanded view (keep Add Event only)
+
+// add: Recurring indicator for repeating todos/events
+// add: Indicator must appear in weekly view, expanded view, and agenda
+
+// fix: Mobile settings menu scrolls off-screen — add vertical buffer + scrolling
+
+// update: Replace settings menu with grouped collapsible layout:
+//   Sections: Appearance, Calendar, Data, Sync
+//   Chevron headers (right = collapsed, down = expanded)
+//   Compact mobile spacing + large tap targets
+//   Appearance: Light/Dark, colour theme dots, “Customise themes…”
+//   Calendar: week start, FY week numbering, agenda date range
+//   Data: Export JSON, Export iCal, Import JSON, Clear all data
+//   Sync: Notifications toggle, Google Drive toggle + status,
+//         UK Bank Holidays toggle + “Manage bank holidays”
+
+// fix: Navigation arrows — Left/Right = prev/next week
+// fix: Navigation arrows — Up/Down = prev/next month
+// fix: When using Up/Down to change month, jump to first week of that month
+
+// remove: Google Photos (Coming Soon)
+// remove: Attach Image + Mood Tag
+Remaining Phase 2
+
+
+P2‑GD: Google Drive Backup (PKCE, JSON sync, last‑write‑wins)
+
+P2‑7: Google Calendar Sync (after Drive; RRULE mapping)
+
+Session Start
+Ask:
+
+“Which feature would you like to work on next?”
+
+Wait for user selection before implementing.
+
+
+

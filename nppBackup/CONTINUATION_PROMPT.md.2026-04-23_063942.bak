@@ -1,0 +1,171 @@
+Chronicle — Clean Continuation Prompt (Claude‑Ready)
+Paste this at the start of a new Claude Code session.
+
+Project Overview
+Chronicle — a personal diary + calendar PWA.
+Vanilla JS (ES modules), HTML5, CSS3. No framework, no build step.
+Mobile‑first (Android primary), desktop supported.
+
+Location: s:\Coding\Diary Calendar\
+
+File Structure
+Code
+index.html
+js/
+  app.js
+  calendar.js
+  diary.js
+  events.js
+  gestures.js
+  holidays.js
+  ical.js
+  notifications.js
+  sync.js
+  themes.js
+  themeEditor.js
+  undo.js
+css/
+  base.css
+  ribbon.css
+  week-view.css
+  day-card.css
+  expanded-day.css
+  modals.css
+  agenda.css
+  themes.css
+  responsive.css
+assets/
+  icons.svg
+Theme System (Required Context)
+Chronicle has a full UI + event theme engine.
+Stored in data.settings:
+
+js
+{
+  uiTheme: 'default',
+  uiThemeCustomVars: { light: {...}, dark: {...} },
+  customUIThemes: [ { id, name, swatch, light, dark } ],
+  eventThemeOverrides: {},
+  customEventThemes: []
+}
+Built‑in UI Themes
+Default, Warm, Forest, Slate, Hi‑Contrast.
+Each has 12 CSS vars for light/dark.
+
+Built‑in Event Themes
+Birthday, Work, Holiday, Personal, Appointment.
+
+CSS Injection
+applyUITheme(settings) → injects UI theme CSS
+
+injectEventThemeCSS(settings) → injects event theme CSS
+Both must always be called together.
+
+Theme Editor
+Bottom sheet with 3 tabs: Presets, UI Colours, Events.
+HSV picker, live preview, custom theme saving, export/import.
+
+Key Patterns & Conventions
+Plain ES modules, no build step
+
+State lives in app.js
+
+Save = saveData() → localStorage
+
+Modals use history API (pushState / popstate)
+
+Event/todo titles stored as HTML
+
+Use esc() when inserting user content
+
+Touch‑first interactions
+
+Format toolbar is a singleton
+
+refreshVisibleWeekCards() for event-strip updates
+
+Holiday data not stored as events
+
+No emojis in UI text
+
+CSS variables everywhere
+
+New Fixes + UI Updates (Your Latest List)
+Apply the following changes:
+
+Code
+// fix: Clear all data should also remove todo/event repeat occurrences
+// fix: Clear day should delete repeat occurrences on that day
+// fix: Reminders inconsistent — ensure reliable triggering and display
+
+// move: Undo/Redo icons to the top of the main menu
+
+// remove: Add Item button from expanded view (keep Add Event only)
+
+// add: Recurring indicator next to todos/events that repeat
+// add: Indicator must appear in weekly view, expanded view, and agenda
+
+// fix: Mobile settings menu scrolls off-screen — add vertical buffer + scrolling
+
+// update: Replace settings menu with new grouped layout:
+//   - Sections: Appearance, Calendar, Data, Sync
+//   - Each section has a chevron header (right = collapsed, down = expanded)
+//   - Compact mobile spacing, larger tap targets
+//   - Appearance: Light/Dark toggle, colour theme dots, “Customise themes…”
+//   - Calendar: week start, FY week numbering, agenda date range
+//   - Data: Export JSON, Export iCal, Import JSON, Clear all data
+//   - Sync: Notifications toggle, Google Drive toggle + status, UK Bank Holidays toggle + “Manage bank holidays”
+
+// fix: Navigation arrows — Left/Right = previous/next week
+// fix: Navigation arrows — Up/Down = previous/next month
+// fix: When using Up/Down arrows to change month, jump to first week of that month
+
+// remove: Google Photos (Coming Soon)
+// remove: Attach Image and Mood Tag
+
+
+Remaining Phase 2 Features
+
+P2‑GD: Google Drive Backup (PKCE OAuth, JSON sync, last‑write‑wins)
+
+P2‑7: Google Calendar Sync (after Drive; two‑way sync, RRULE mapping)
+
+Session Start Instruction
+At the start of each new session, ask:
+
+“Which feature would you like to work on next?”
+
+Do not implement anything until the user chooses.
+
+
+----------
+// fix: Clear all data should also remove todo/event repeat occurrences
+// fix: Clear day should delete repeat occurrences on that day
+// fix: Reminders inconsistent — ensure reliable triggering and display
+
+// remove: Google Photos (Coming Soon)
+// remove: Attach Image and Mood Tag
+
+// move: Undo/Redo icons to the top of the main menu for easier access
+
+// remove: Add Item button from expanded view (keep Add Event only)
+
+// add: Recurring indicator next to todos/events that repeat
+// add: Recurring indicator must appear in weekly view, expanded view, and agenda
+
+// fix: Mobile settings menu scrolls off-screen — add vertical buffer and enable vertical scrolling
+
+// update: Replace current settings menu with new grouped layout:
+//   - Sections: Appearance, Calendar, Data, Sync
+//   - Each section has a chevron header (right-facing when collapsed, down-facing when expanded)
+//   - Inside each section, controls are grouped tightly for mobile (compact spacing, larger tap targets)
+//   - Appearance section includes Light/Dark toggle, colour theme dots, and “Customise themes…” link
+//   - Calendar section includes week start, FY week numbering, agenda date range, and recurrence note
+//   - Data section includes Export JSON, Export iCal, Import JSON, Clear all data
+//   - Sync section includes Notifications toggle, Google Drive toggle with status text, UK Bank Holidays toggle with “Manage bank holidays” link
+//   - Entire layout optimized for mobile: compact, scrollable, collapsible sections
+
+// fix: Navigation arrows — Left/Right = previous/next week
+// fix: Navigation arrows — Up/Down = previous/next month
+// fix: When using Up/Down arrows to change month, automatically jump to the first week of that month
+

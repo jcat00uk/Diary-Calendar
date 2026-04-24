@@ -403,18 +403,12 @@ function nextMonth()  { state.currentWeekStart = navigateMonth(state.currentWeek
 
 function prevMonthFirst() {
   const mid = getDaysOfWeek(state.currentWeekStart)[3];
-  let target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() - 1, 1), state.data.settings.weekStart);
-  if (target.getTime() === state.currentWeekStart.getTime())
-    target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() - 2, 1), state.data.settings.weekStart);
-  state.currentWeekStart = target;
+  state.currentWeekStart = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() - 1, 1), state.data.settings.weekStart);
   renderWeekGrid();
 }
 function nextMonthFirst() {
   const mid = getDaysOfWeek(state.currentWeekStart)[3];
-  let target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + 1, 1), state.data.settings.weekStart);
-  if (target.getTime() === state.currentWeekStart.getTime())
-  target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + 2, 1), state.data.settings.weekStart);
-state.currentWeekStart = target;
+  state.currentWeekStart = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + 1, 1), state.data.settings.weekStart);
   renderWeekGrid();
 }
 function anyModalOpen() {
@@ -1375,18 +1369,6 @@ function openSettingsDropdown() {
   `;
 
   dropdown.innerHTML = `
-    <div class="settings-group open" id="sg-undo">
-      <div class="settings-group-body" style="display:block">
-        <div class="settings-section">
-          <div class="settings-row${canUndo() ? '' : ' quick-action-item--disabled'}" data-action="undo" style="cursor:${canUndo() ? 'pointer' : 'default'}">
-            <span class="settings-action" style="font-size:14px">↩ Undo</span>
-          </div>
-          <div class="settings-row${canRedo() ? '' : ' quick-action-item--disabled'}" data-action="redo" style="cursor:${canRedo() ? 'pointer' : 'default'}">
-            <span class="settings-action" style="font-size:14px">↪ Redo</span>
-          </div>
-        </div>
-      </div>
-    </div>
     <div class="settings-group open" id="sg-appearance">
       <div class="settings-group-header" data-toggle="sg-appearance">
         <span class="settings-group-label">Appearance</span>
@@ -1475,7 +1457,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-data">
+    <div class="settings-group" id="sg-data">
       <div class="settings-group-header" data-toggle="sg-data">
         <span class="settings-group-label">Data</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1489,7 +1471,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-sync">
+    <div class="settings-group" id="sg-sync">
       <div class="settings-group-header" data-toggle="sg-sync">
         <span class="settings-group-label">Sync</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1674,8 +1656,6 @@ function handleSettingsAction(action) {
       break;
 
     case 'about': showToast(STRINGS.aboutText); break;
-    case 'undo':  handleUndo(); break;
-    case 'redo':  handleRedo(); break;
   }
 }
 
@@ -2343,11 +2323,11 @@ function init() {
   });
   document.getElementById('btnSettings').addEventListener('click', openSettingsDropdown);
 
-  // ── Edge nav arrows (Left/Right = week, Up/Down = first of month) ──
-  document.getElementById('navPrevWeek').addEventListener('click', prevMonthFirst);
-  document.getElementById('navNextWeek').addEventListener('click', nextMonthFirst);
-  document.getElementById('navPrevMonth').addEventListener('click', prevWeek);
-  document.getElementById('navNextMonth').addEventListener('click', nextWeek);
+  // ── Edge nav arrows ──
+  document.getElementById('navPrevWeek').addEventListener('click', prevWeek);
+  document.getElementById('navNextWeek').addEventListener('click', nextWeek);
+  document.getElementById('navPrevMonth').addEventListener('click', prevMonth);
+  document.getElementById('navNextMonth').addEventListener('click', nextMonth);
 
   // ── Agenda panel controls ──
   document.getElementById('btnAgendaClose').addEventListener('click', () => history.back());
@@ -2547,10 +2527,10 @@ function init() {
         (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) ||
          document.activeElement.isContentEditable);
       if (!isTyping) {
-        if (e.key === 'ArrowLeft')  { prevWeek();       return; }
-        if (e.key === 'ArrowRight') { nextWeek();       return; }
-        if (e.key === 'ArrowUp')    { prevMonthFirst(); return; }
-        if (e.key === 'ArrowDown')  { nextMonthFirst(); return; }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); prevWeek();       return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); nextWeek();       return; }
+        if (e.key === 'ArrowUp')    { e.preventDefault(); prevMonthFirst(); return; }
+        if (e.key === 'ArrowDown')  { e.preventDefault(); nextMonthFirst(); return; }
       }
     }
   });

@@ -1,227 +1,510 @@
-# Chronicle — Continuation Prompt
+Chronicle — diary + calendar PWA. Vanilla JS ES modules, HTML, CSS. Mobile-first.
 
-Paste this entire file at the start of a new Claude Code session to pick up where we left off.
-
----
-
-## Project
-
-**Chronicle** — a personal diary/calendar PWA. Vanilla JS (ES modules), HTML5, CSS3. No framework, no build step. Runs directly in browser. Target: mobile-first (Android primary), desktop supported.
-
-**Location:** `s:\Coding\Diary Calendar\`
-
-**File structure:**
-```
+Files:
 index.html
-js/
-  app.js            — state, rendering, modals, navigation, orchestration
-  calendar.js       — date math helpers
-  diary.js          — diary contenteditable, autosave, format toolbar singleton
-  events.js         — add/update/delete/toggle, series (recurring), occurrence generation
-  gestures.js       — long-press (touch + mouse)
-  holidays.js       — UK bank holidays computation (England & Wales), Easter algorithm
-  ical.js           — iCal (.ics) export builder
-  notifications.js  — Web Notifications API scheduling
-  sync.js           — dirty-flag / Google Drive stub (not yet implemented)
-  themes.js         — theme data (built-in UI + event themes), CSS injection
-  themeEditor.js    — theme editor bottom sheet (3 tabs + HSV colour picker)
-  undo.js           — undo/redo stack
-css/
-  base.css          — CSS variables, reset, typography
-  ribbon.css        — top header/ribbon buttons
-  week-view.css     — week grid layout
-  day-card.css      — day cards, diary area, format toolbar
-  expanded-day.css  — full-screen day overlay
-  modals.css        — bottom sheets, settings dropdown, date picker, quick actions
-  agenda.css        — agenda/events list panel
-  themes.css        — theme editor sheet + HSV picker styles
-  responsive.css    — max-width 480px centering, desktop border
-assets/
-  icons.svg         — SVG sprite
-```
+js/: app.js, calendar.js, diary.js, events.js, gestures.js,
+     holidays.js, ical.js, notifications.js, sync.js,
+     themes.js, themeEditor.js, undo.js
+css/: base.css, ribbon.css, week-view.css, day-card.css,
+      expanded-day.css, modals.css, agenda.css, themes.css,
+      responsive.css
+assets/: icons.svg
 
----
+Theme system:
+data.settings stores uiTheme, uiThemeCustomVars, customUIThemes,
+eventThemeOverrides, customEventThemes.
+Always call applyUITheme() + injectEventThemeCSS() together.
 
-## Phase 1 — Complete
+Conventions:
+ES modules, state in app.js, saveData() for persistence,
+modals use history API, esc() for user content,
+touch-first interactions, CSS variables everywhere.
 
-Week grid (Mon-start and Sun-start), day cards, navigation (edge arrows), long-press quick actions sheet, expanded day overlay, format toolbar (bold/italic/underline/highlight/text colour with custom HSV picker), add-event modal, settings dropdown, agenda panel, date picker, back-button history API (all modals), undo/redo, dark mode, midnight refresh, localStorage persistence.
 
----
+Remaining Phase 2:
+P2-GD Google Drive Backup
+P2-7 Google Calendar Sync
 
-## Phase 2 — Complete
+Coding behaviour:
+Use diff-only output.
+No full file rewrites unless requested.
+Keep answers short unless I ask for detail.
 
-### P2-1: UK Bank Holidays
-- `holidays.js` computes England & Wales bank holidays algorithmically (no hardcoded list)
-- Amber badge on day cards; amber banner in expanded view
-- Settings toggle On/Off + "Manage bank holidays" modal (per-holiday show/hide, grouped by year, current + next 2 years)
-- Stored as `data.settings.holidays = { enabled: bool, hidden: string[] }` — not stored as events
+At session start, ask: “Which feature would you like to work on next?”
 
-### P2-3: Full-Text Search
-- Search across diary text + event/todo/reminder titles and notes
-- Grouped results by date, snippet highlighting, tap navigates to week + opens expanded day
-- Debounced input, mobile-compatible
 
-### P2-4: Repeat Events
-- daily/weekly/monthly/yearly with interval, end by date/count/never
-- Per-occurrence exceptions, edit/delete single or entire series
-- Recurring events live in `state.data.series[]`; virtual occurrences generated on-the-fly by `generateOccurrencesForSeries()` in `events.js` — never stored per-day
-- Agenda shows recurring events within a configurable window (Before/After settings)
+here is the code from my previous project that uses google drive sync
 
-### P2-5: System Notifications
-- `scheduleReminders()` clears/re-registers `setTimeout` calls for events with `reminderMinutes` within next 24h
-- Permission requested on first use, surfaced in settings
+Auth + Init
+let _tokenClient = null, _pendingSyncAfterAuth = false;
 
-### P2-6: iCal Export
-- Exports all events + recurring series as `.ics` (VEVENT + RRULE)
-- Settings → "Export iCal (.ics)"
+function initGoogleAuth(){
+  const cid = getClientId();
+  if(!cid){ Sync.setStatus('unsigned'); return; }
 
-### P2-8: Day Navigation in Expanded View
-- Prev/next day chevron buttons in expanded overlay header
-- Navigating replaces history entry so Back always returns to week grid
+  if(typeof google === 'undefined' || !google.accounts){
+    return;
+  }
 
-### P2-10: Custom In-Page Colour Picker
-- HSV canvas + hue bar + hex input + Apply/Cancel — replaces `<input type="color">` which is broken on Android
-- Integrated into the diary format toolbar text-colour flow
+  _tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: cid,
+    scope: GDRIVE_SCOPE,
+    callback: (resp) => {
+      if(resp.error){
+        const silent = ['access_denied','popup_closed_by_user','immediate_failed'];
+        if(silent.includes(resp.error)){
+          Sync.setStatus('unsigned');
+          return;
+        }
+        console.error('GIS:', resp);
+        Sync.setStatus('error','☁ Auth error');
+        return;
+      }
 
-### P2-2: Colour Themes ← implemented in the most recent sessions
-See full detail in the section below.
+      Sync.token = resp.access_token;
 
----
+      const savedEmail = localStorage.getItem('shiftbook_userEmail');
 
-## P2-2: Colour Themes — Full Detail
+      fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + resp.access_token)
+        .then(r => r.json())
+        .then(info => {
+          const email = info.email || savedEmail || 'Signed in';
+          localStorage.setItem('shiftbook_userEmail', email);
+          localStorage.setItem('shiftbook_hasConsented', '1');
+          Sync.setUser(email);
+        })
+        .catch(() => {
+          Sync.setUser(savedEmail || 'Signed in');
+        });
 
-This was the most recently implemented feature. Read `js/themes.js` and `js/themeEditor.js` before working on anything theme-related.
+      if(_pendingSyncAfterAuth){
+        _pendingSyncAfterAuth = false;
+        syncNow();
+      }
+    },
+  });
 
-### Data model (stored in `data.settings`)
-```js
-{
-  uiTheme: 'default',            // active UI theme id
-  uiThemeCustomVars: {           // per-session colour overrides on top of base theme
-    light: { '--bg-primary': '#fff', ... },
-    dark:  { '--bg-primary': '#111', ... },
-  },
-  customUIThemes: [              // user-saved named themes
-    { id: 'custom-1234', name: 'My Theme', swatch: '#cfdff2', light: {...12 vars}, dark: {...12 vars} }
-  ],
-  eventThemeOverrides: {},       // per-id overrides for built-in event themes (currently unused)
-  customEventThemes: [],         // user-created event themes
+  const prevEmail = localStorage.getItem('shiftbook_userEmail');
+  const hasConsented = localStorage.getItem('shiftbook_hasConsented');
+
+  if(prevEmail && hasConsented){
+    Sync.setUser(prevEmail);
+    _tokenClient.requestAccessToken({prompt:'none'});
+  } else {
+    Sync.setStatus('unsigned');
+  }
 }
-```
 
-### Built-in UI themes (in `themes.js`)
-5 themes: Default, Warm, Forest, Slate, Hi-Contrast. Each has `light` and `dark` variants with 12 CSS variables:
-`--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--day-card-bg`, `--day-card-bg-weekend`, `--day-header-bg`, `--day-header-bg-weekend`, `--text-primary`, `--text-secondary`, `--text-tertiary`, `--today-border`, `--today-text`
-
-### Built-in event themes (in `themes.js`)
-5 themes: Birthday, Work, Holiday, Personal, Appointment. Each has `light: {bg, text}` and `dark: {bg, text}`.
-
-### CSS injection
-- `applyUITheme(settings)` → injects `<style id="chronicle-ui-theme">` with `:root{...}` and `body.dark{...}`. Also clears any inline CSS variable overrides on `documentElement.style` left by live picker previews before injecting.
-- `injectEventThemeCSS(settings)` → injects `<style id="chronicle-event-themes">` with rules for `.event-pill--theme-X`, `.todo-item--theme-X`, `.expanded-event-item--theme-X`, `.agenda-item--theme-X`
-- Both style tags appended to `<head>` after linked stylesheets — no `!important` needed; cascade priority comes from specificity + injection order.
-
-### Theme editor (bottom sheet, `themeEditor.js`)
-- 54dvh half-screen sheet, z-index 310, 3 tabs: **Presets** | **UI Colours** | **Events**
-- **Footer:** Cancel | Done — "Done" commits live changes to storage via `_onEditorSave()`; "Cancel" reverts settings to `_originalSettings` deep clone
-- **Presets tab:** swatch grid derived from `--day-header-bg` of each theme's light/dark vars (dynamically computed, not stale stored value). Delete (custom only) with confirm → falls back to Default if deleted theme was active. Import JSON.
-- **UI Colours tab:** grouped variable rows, each opens HSV picker for live preview. Sticky action bar at panel bottom with: Update button (custom themes only) | Save as button. Hint text explains the difference. Export button in header.
-- **Events tab:** list of all event themes, expandable row per theme to edit bg+text for light+dark. Built-in themes: Save always creates a new custom theme (cannot overwrite builtins). Custom themes: Save in-place. Name validation: non-empty, no duplicates (case-insensitive).
-
-### HSV colour picker (`themeEditor.js`, `css/themes.css`)
-- Overlay (z-index 400), card slides up from bottom
-- SV canvas (260×160 CSS, `height="160"` attribute) + hue strip (260×18)
-- **Two-row bottom layout**: hex+preview on top row, Cancel+Apply full-width below — prevents Apply going off-screen on small devices
-- `max-height: min(85dvh, 420px); overflow-y: auto` on picker card
-
-### Event theme in add/edit modal
-- `<select id="evtTheme">` replaced with `<input type="hidden" id="evtTheme">` + pill buttons row (`#evtThemePills`)
-- Pills show each theme's actual bg/text colours; clicking a pill updates hidden input and applies colours to the `#evtTitle` contenteditable for live preview
-- `const isEdit = !!existing?.id` — fix: the quick-actions "Add Todo" path passes `{ type: 'todo', ... }` with no `id`, so `isEdit` must be `false` for new items
-
-### Quick actions — mobile undo/redo
-- Undo ↩ and Redo ↪ entries added to quick actions sheet (long-press on a day)
-- Greyed/disabled via `.quick-action-item--disabled` when stack is empty
-
-### Delete confirmations
-All three delete paths now have `confirm("Delete "title"?")`:
-1. Expanded day view `[data-delete]` handler
-2. Todo label inline detail popup (week grid)
-3. Event pill inline detail popup (week grid)
-
----
-
-## Phase 2 — Remaining
-
-### P2-9: Mood Tags
-- Emoji mood selector (😊 😐 😔 😤 😴) in expanded day view
-- Stored as `days[dateKey].mood`
-- Small mood indicator on day card
-
-### P2-GD: Google Drive Backup ← **do this before Google Calendar**
-- OAuth 2.0 PKCE flow (web app, no backend) — user has existing OAuth code from a previous project to reference
-- Read/write a single JSON file (`chronicle_data.json`) to user's Drive
-- Completes the existing dirty-flag stub in `sync.js`
-- Show last-sync timestamp in settings (UI stub already exists)
-- On load: if Drive file newer than localStorage, pull from Drive; otherwise push localStorage → Drive
-- Conflict strategy: last-write-wins for MVP
-
-### P2-7: Google Calendar Sync ← **after Google Drive**
-- OAuth 2.0 PKCE flow — shares auth infrastructure with Google Drive (same `gapi` / token handling)
-- Two-way sync of events and todos to/from Google Calendar
-- Recurring series need RRULE mapping in both directions
-- Scaffold auth flow first, then read (import GCal → Chronicle), then write (Chronicle → GCal)
-- Handle GCal event IDs — store `gcalId` on Chronicle events so updates don't create duplicates
-
----
-
-## Android Integration Plans
-
-Chronicle is designed to eventually be wrapped as a native Android app (likely via a WebView or TWA — Trusted Web Activity). Keep these constraints in mind when implementing new features:
-
-- **No browser-specific APIs** without a fallback (e.g. Web Share API — check `navigator.share` support)
-- **Service Worker / offline first** — all JS/CSS/assets should be cacheable; Google API calls are the only network dependency
-- **OAuth redirect URI** — the PKCE flow must handle both web (`https://...`) and Android (`com.example.chronicle:/callback`) redirect URIs. Plan for this when implementing Google auth.
-- **Touch targets** — minimum 44px tap targets everywhere; no hover-only interactions
-- **Safe area insets** — already handled via `var(--safe-top)` and `var(--safe-bottom)` CSS variables
-- **No `alert()`/`confirm()` in production Android WebView** — these are blocked by default. Replace with custom modal dialogs before Android release. Currently `confirm()` is used for delete confirmations — this is a known tech debt item.
-- **localStorage** — available in Android WebView; data persistence is fine for MVP. Google Drive sync will be the cloud backup layer.
-- **File download** (`a.href = url; a.click()`) — works in browser but not in WebView. Will need `Android.downloadFile(content, filename)` JavaScript bridge for iCal/JSON export on Android.
-- **Notifications API** — not available in standard WebView; will need a native Android notification bridge for reminders.
-
----
-
-## Key Patterns & Conventions
-
-- **No build step** — plain ES modules. All imports are relative paths.
-- **State** lives in `app.js`: `state.data`, `state.today`, `state.currentWeekStart`
-- **Save** = `saveData()` → `localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data))`
-- **Modals** push `history.pushState({ chronicle: 'modal', modal: 'name' }, '')` on open; close via `history.back()` → `popstate` handler dispatches to the right close function
-- **Event/todo titles** stored as HTML (rich text from contenteditable); render with `evt.title` directly in innerHTML; strip with `stripHTML()` before search/export/notifications
-- **Comments** only for non-obvious WHY — never WHAT or HOW
-- **No emojis** in UI text (emojis used as icons only where already present)
-- **CSS variables** everywhere — defined in `base.css :root` and `body.dark`
-- **`esc(str)`** — always escape user content before inserting into innerHTML — EXCEPT `evt.title` (already safe HTML from contenteditable)
-- **Gestures** use touch events (`touchstart`/`touchend`) for mobile reliability; no pointer events at grid level
-- **Format toolbar** is a singleton attached to `document.body`; activates on `.diary-area`, `.expanded-diary-area`, and `.event-title-input`
-- **`refreshVisibleWeekCards()`** — refreshes only the events-strip; call `renderWeekGrid()` when badges or structural card content changes
-- **Holiday data** — `data.settings.holidays = { enabled, hidden[] }` — not stored as events
-- **Theme application** — call both `applyUITheme(settings)` and `injectEventThemeCSS(settings)` whenever settings change; never call one without the other
-
----
-
-## Session Start Instruction
-
-At the start of each new session, present the remaining Phase 2 list and ask:
-
-> "Which feature would you like to work on next?"
-
-Do not begin implementing until the user confirms their choice.
+window._onGISLoad = function(){
+  initGoogleAuth();
+};
 
 
-----------
-clear all data doesn't clear todo/event repeat occurrences 
-undo/redo icons should be in the header ribbon b4 the search icon
-clear day doesn't delete repeat occurrences on that day
-expanded view has add item and add even which replicate function, remove add item
-todo/events should have a little indicator next to them if they are a recurring event
+Sign In / Sign Out
+function signIn(){
+  if(!getClientId()){
+    toast('Google Client ID not set — see app setup instructions');
+    return;
+  }
+
+  if(!_tokenClient) initGoogleAuth();
+  if(!_tokenClient){
+    toast('Google auth not ready — check console for errors');
+    return;
+  }
+
+  _tokenClient.requestAccessToken({prompt:''});
+}
+
+function signOut(){
+  if(Sync.token)
+    google.accounts.oauth2.revoke(Sync.token, () => {});
+
+  Sync.token = null;
+  Sync.fileId = null;
+
+  localStorage.removeItem('shiftbook_userEmail');
+  localStorage.removeItem('shiftbook_hasConsented');
+
+  Sync.setUser(null);
+  toast('Signed out of Google');
+}
+🌐 Drive API Helper
+async function driveRequest(url, options = {}){
+  if(!Sync.token) throw new Error('not_signed_in');
+
+  const headers = {
+    'Authorization': 'Bearer ' + Sync.token,
+    ...(options.headers || {})
+  };
+
+  const resp = await fetch(url, { ...options, headers });
+
+  if(resp.status === 401){
+    Sync.token = null;
+    Sync.setUser(null);
+    throw new Error('auth_expired');
+  }
+
+  return resp;
+}
+📄 File Lookup
+async function getDriveFileId(){
+  if(Sync.fileId) return Sync.fileId;
+
+  const url =
+    `https://www.googleapis.com/drive/v3/files?spaces=${GDRIVE_FOLDER}` +
+    `&q=name='${GDRIVE_FILE_NAME}'&fields=files(id,name,modifiedTime)`;
+
+  const resp = await driveRequest(url);
+  const data = await resp.json();
+
+  if(data.files && data.files.length > 0){
+    Sync.fileId = data.files[0].id;
+    return Sync.fileId;
+  }
+
+  return null;
+}
+⬇️ Download from Drive
+async function downloadFromDrive(){
+  const fileId = await getDriveFileId();
+  if(!fileId) return null;
+
+  const resp = await driveRequest(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+  );
+
+  if(!resp.ok) return null;
+
+  try {
+    return JSON.parse(await resp.text());
+  } catch {
+    return null;
+  }
+}
+⬆️ Upload to Drive
+async function uploadToDrive(payload){
+  const fileId = await getDriveFileId();
+
+  const metadata = {
+    name: GDRIVE_FILE_NAME,
+    ...(fileId ? {} : { parents: [GDRIVE_FOLDER] })
+  };
+
+  const form = new FormData();
+
+  form.append(
+    'metadata',
+    new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+  );
+
+  form.append(
+    'file',
+    new Blob([payload], { type: 'application/json' })
+  );
+
+  const url = fileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+
+  const resp = await driveRequest(url, {
+    method: fileId ? 'PATCH' : 'POST',
+    body: form
+  });
+
+  if(!resp.ok) throw new Error('upload_failed:' + resp.status);
+
+  const result = await resp.json();
+  Sync.fileId = result.id;
+
+  return result;
+}
+📦 Payload Builder
+function buildDrivePayload(){
+  return JSON.stringify({
+    ...S,
+    version: DATA_VERSION,
+    lastModified: new Date().toISOString(),
+    deviceId: getDeviceId()
+  });
+}
+🔄 Main Sync Engine
+async function syncNow(){
+  if(!getClientId()){
+    toast('Google Client ID not configured — see setup instructions');
+    return;
+  }
+
+  if(!Sync.token){
+    _pendingSyncAfterAuth = true;
+
+    const hasConsented = localStorage.getItem('shiftbook_hasConsented');
+
+    if(hasConsented && _tokenClient){
+      _tokenClient.requestAccessToken({prompt:'none'});
+    } else {
+      signIn();
+    }
+    return;
+  }
+
+  Sync.setStatus('syncing');
+
+  try {
+    const driveData = await downloadFromDrive();
+
+    if(!driveData){
+      await uploadToDrive(buildDrivePayload());
+      S._lastModified = new Date().toISOString();
+      persist();
+      _markSynced();
+      toast('Synced — Drive file created');
+      return;
+    }
+
+    const dt = new Date(driveData.lastModified || 0).getTime();
+    const lt = new Date(S._lastModified || 0).getTime();
+    const THRESH = 2000;
+
+    if(Math.abs(dt - lt) < THRESH){
+      _markSynced();
+      toast('Already up to date');
+      return;
+    }
+
+    if(dt > lt + THRESH){
+      showConflict(
+        driveData,
+        () => _applyDriveData(driveData),
+        async () => {
+          await uploadToDrive(buildDrivePayload());
+          S._lastModified = new Date().toISOString();
+          persist();
+          _markSynced();
+          toast('Local data pushed to Drive');
+        }
+      );
+
+      Sync.setStatus('idle');
+      return;
+    }
+
+    await uploadToDrive(buildDrivePayload());
+    S._lastModified = new Date().toISOString();
+    persist();
+
+    _markSynced();
+    toast('Synced — Drive updated');
+
+  } catch(err){
+    console.error('Sync:', err);
+
+    if(err.message === 'auth_expired'){
+      Sync.setStatus('unsigned');
+      toast('Session expired — sign in again');
+    }
+    else if(!navigator.onLine){
+      Sync.setStatus('error','☁ Offline');
+      toast('No internet');
+    }
+    else {
+      Sync.setStatus('error');
+      toast('Sync error: ' + err.message);
+    }
+
+    updateSyncTimestamps(true);
+  }
+}
+⚔️ Conflict Handling
+function showConflict(driveData, onKeepDrive, onKeepLocal){
+  document.getElementById('conflictLocalTime').textContent =
+    new Date(S._lastModified || 0).toLocaleString('en-GB');
+
+  document.getElementById('conflictCloudTime').textContent =
+    new Date(driveData.lastModified || 0).toLocaleString('en-GB');
+
+  document.getElementById('conflictMbg').classList.add('open');
+
+  document.getElementById('conflictBtnCloud').onclick = () => {
+    closeConflictModal();
+    onKeepDrive();
+  };
+
+  document.getElementById('conflictBtnLocal').onclick = () => {
+    closeConflictModal();
+    onKeepLocal();
+  };
+}
+
+function closeConflictModal(){
+  document.getElementById('conflictMbg').classList.remove('open');
+}
+✅ Sync State Helpers
+function _markSynced(){
+  Sync.lastSynced = new Date().toISOString();
+  localStorage.setItem('shiftbook_lastSynced', Sync.lastSynced);
+  Sync.setStatus('synced');
+  updateSyncTimestamps(false);
+}
+
+function refreshSyncButton(){
+  if(typeof Sync === 'undefined' || !Sync.userEmail) return;
+  Sync.setStatus(Sync.status);
+}
+
+function hasUnsyncedChanges(){
+  if(!Sync.userEmail) return false;
+
+  const lt = new Date(S._lastModified || 0).getTime();
+  const st = new Date(Sync.lastSynced || 0).getTime();
+
+  return lt > st + 2000;
+}
+🌙 Background Sync
+async function syncBackground(){
+  if(!Sync.token) return;
+
+  if(!hasUnsyncedChanges() && !localStorage.getItem(SYNC_CONFLICT_KEY))
+    return;
+
+  const now = Date.now();
+  if(now - _lastBgSync < BG_SYNC_THROTTLE_MS) return;
+
+  _lastBgSync = now;
+
+  try {
+    const driveData = await downloadFromDrive();
+
+    if(!driveData){
+      await uploadToDrive(buildDrivePayload());
+      S._lastModified = new Date().toISOString();
+      persist();
+      _markSynced();
+      localStorage.removeItem(SYNC_CONFLICT_KEY);
+      return;
+    }
+
+    const dt = new Date(driveData.lastModified || 0).getTime();
+    const lt = new Date(S._lastModified || 0).getTime();
+    const THRESH = 2000;
+
+    if(Math.abs(dt - lt) < THRESH){
+      _markSynced();
+      localStorage.removeItem(SYNC_CONFLICT_KEY);
+      return;
+    }
+
+    if(lt > dt + THRESH){
+      await uploadToDrive(buildDrivePayload());
+      S._lastModified = new Date().toISOString();
+      persist();
+      _markSynced();
+      localStorage.removeItem(SYNC_CONFLICT_KEY);
+      return;
+    }
+
+    localStorage.setItem(SYNC_CONFLICT_KEY, JSON.stringify({
+      driveTime: driveData.lastModified,
+      localTime: S._lastModified,
+      flaggedAt: new Date().toISOString()
+    }));
+
+    renderAlerts();
+
+  } catch(e){
+    console.warn('Background sync failed:', e.message);
+  }
+}
+
+-------------------------------------------
+
+
+SMART CODE MODE (DEBUG ↔ DIFF ↔ INTERACTIVE FIX)
+Claude must choose the correct mode automatically.
+
+MODE SELECTION
+Use DEBUG MODE if:
+
+Errors, bugs, or unclear behaviour are mentioned
+
+I ask “why”, “what’s wrong”, or “explain”
+
+Use DIFF MODE if:
+
+I explicitly request a fix/change AND it is clearly defined
+
+Use INTERACTIVE FIX MODE if:
+
+Multiple possible fixes exist
+
+OR the fix could impact behaviour
+
+OR uncertainty exists
+
+Default → DEBUG MODE
+
+DEBUG MODE (ROOT‑CAUSE FIRST)
+When in DEBUG MODE, Claude MUST NOT output code or diffs.
+
+ROOT CAUSE
+
+Exact reason
+
+Point to specific code
+
+WHAT IS BROKEN
+
+WHY IN THIS CODEBASE
+
+FIX OPTIONS (NUMBERED)  
+Each fix must include:
+
+What it changes
+
+Risk level (Low / Medium / High)
+
+Scope (lines/functions affected)
+
+End with:
+“Reply with the fix number(s) to apply, or say ‘apply safest’.”
+
+DEBUG MODE RULE:
+
+No code, no diffs, no patches.
+
+INTERACTIVE FIX MODE
+Triggered when I reply with:
+
+A number → apply ONLY that fix
+
+Multiple numbers → apply them in order
+
+“apply safest” → choose lowest‑risk fix
+
+Then switch to DIFF MODE.
+
+DIFF MODE (STRICT, LOCATION‑AWARE)
+Claude MUST:
+
+Output ONLY minimal diffs
+
+NEVER rewrite full files
+
+NEVER rewrite full functions
+
+NEVER modify unrelated code
+
+NEVER refactor unless explicitly requested
+
+ALWAYS include:
+
+File path
+
+Function/block name
+
+Line numbers (if snippet provided)
+
+2–5 lines of context
+
 

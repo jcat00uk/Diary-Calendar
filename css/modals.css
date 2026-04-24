@@ -14,16 +14,19 @@
   position: fixed;
   top: calc(var(--safe-top) + var(--ribbon-height) + 4px);
   right: 10px;
-  width: 220px;
+  width: 240px;
+  max-height: calc(100dvh - var(--ribbon-height) - var(--safe-top) - 24px);
   background: var(--bg-primary);
   border: 0.5px solid var(--color-border-strong);
   border-radius: var(--radius-modal);
   z-index: 200;
-  overflow: hidden;
+  overflow-y: auto;
   transform-origin: top right;
   transform: scale(0.95);
   opacity: 0;
   transition: transform 0.15s ease, opacity 0.15s ease;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 }
 
 .settings-dropdown.open {
@@ -37,6 +40,58 @@
 
 .settings-section + .settings-section {
   border-top: 0.5px solid var(--color-border);
+}
+
+/* ── Collapsible settings groups ───────────────────────── */
+
+.settings-group + .settings-group {
+  border-top: 0.5px solid var(--color-border);
+}
+
+.settings-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.settings-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+  transform: rotate(90deg);
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+
+.settings-group:not(.open) .settings-chevron {
+  transform: rotate(0deg);
+}
+
+.settings-group-body {
+  display: none;
+}
+
+.settings-group.open .settings-group-body {
+  display: block;
+}
+
+/* recurring indicator */
+.pill-repeat,
+.item-repeat {
+  font-size: 10px;
+  opacity: 0.65;
+  margin-left: 2px;
 }
 
 .settings-row {

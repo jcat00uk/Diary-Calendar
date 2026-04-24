@@ -1,0 +1,133 @@
+Chronicle — diary + calendar PWA. Vanilla JS ES modules, HTML, CSS. Mobile-first.
+
+Files:
+index.html
+js/: app.js, calendar.js, diary.js, events.js, gestures.js,
+     holidays.js, ical.js, notifications.js, sync.js,
+     themes.js, themeEditor.js, undo.js
+css/: base.css, ribbon.css, week-view.css, day-card.css,
+      expanded-day.css, modals.css, agenda.css, themes.css,
+      responsive.css
+assets/: icons.svg
+
+Theme system:
+data.settings stores uiTheme, uiThemeCustomVars, customUIThemes,
+eventThemeOverrides, customEventThemes.
+Always call applyUITheme() + injectEventThemeCSS() together.
+
+Conventions:
+ES modules, state in app.js, saveData() for persistence,
+modals use history API, esc() for user content,
+touch-first interactions, CSS variables everywhere.
+
+Bug fixes + UI updates:
+- Clear all data removes repeat occurrences
+- Clear day deletes repeat occurrences
+- Stabilise reminders
+- Move undo/redo to top of main menu
+- Remove Add Item (keep Add Event)
+- Add recurring indicator in weekly view, expanded view, agenda
+- Mobile settings menu: add vertical buffer + scrolling
+- Replace settings menu with grouped collapsible layout:
+  Appearance, Calendar, Data, Sync (chevrons, compact mobile spacing)
+- Navigation: Left/Right = week; Up/Down = month; Up/Down jumps to first week of month
+- Remove Google Photos, Attach Image, Mood Tag
+
+Remaining Phase 2:
+P2-GD Google Drive Backup
+P2-7 Google Calendar Sync
+
+Coding behaviour:
+Use diff-only output.
+No full file rewrites unless requested.
+Keep answers short unless I ask for detail.
+
+At session start, ask: “Which feature would you like to work on next?”
+
+
+SMART CODE MODE (DEBUG ↔ DIFF ↔ INTERACTIVE FIX)
+Claude must choose the correct mode automatically.
+
+MODE SELECTION
+Use DEBUG MODE if:
+
+Errors, bugs, or unclear behaviour are mentioned
+
+I ask “why”, “what’s wrong”, or “explain”
+
+Use DIFF MODE if:
+
+I explicitly request a fix/change AND it is clearly defined
+
+Use INTERACTIVE FIX MODE if:
+
+Multiple possible fixes exist
+
+OR the fix could impact behaviour
+
+OR uncertainty exists
+
+Default → DEBUG MODE
+
+DEBUG MODE (ROOT‑CAUSE FIRST)
+When in DEBUG MODE, Claude MUST NOT output code or diffs.
+
+ROOT CAUSE
+
+Exact reason
+
+Point to specific code
+
+WHAT IS BROKEN
+
+WHY IN THIS CODEBASE
+
+FIX OPTIONS (NUMBERED)  
+Each fix must include:
+
+What it changes
+
+Risk level (Low / Medium / High)
+
+Scope (lines/functions affected)
+
+End with:
+“Reply with the fix number(s) to apply, or say ‘apply safest’.”
+
+DEBUG MODE RULE:
+
+No code, no diffs, no patches.
+
+INTERACTIVE FIX MODE
+Triggered when I reply with:
+
+A number → apply ONLY that fix
+
+Multiple numbers → apply them in order
+
+“apply safest” → choose lowest‑risk fix
+
+Then switch to DIFF MODE.
+
+DIFF MODE (STRICT, LOCATION‑AWARE)
+Claude MUST:
+
+Output ONLY minimal diffs
+
+NEVER rewrite full files
+
+NEVER rewrite full functions
+
+NEVER modify unrelated code
+
+NEVER refactor unless explicitly requested
+
+ALWAYS include:
+
+File path
+
+Function/block name
+
+Line numbers (if snippet provided)
+
+2–5 lines of context

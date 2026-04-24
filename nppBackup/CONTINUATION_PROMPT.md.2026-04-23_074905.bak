@@ -1,0 +1,121 @@
+Chronicle — diary + calendar PWA. Vanilla JS ES modules, HTML, CSS. Mobile-first.
+
+Files:
+index.html
+js/: app.js, calendar.js, diary.js, events.js, gestures.js,
+     holidays.js, ical.js, notifications.js, sync.js,
+     themes.js, themeEditor.js, undo.js
+css/: base.css, ribbon.css, week-view.css, day-card.css,
+      expanded-day.css, modals.css, agenda.css, themes.css,
+      responsive.css
+assets/: icons.svg
+
+Theme system:
+data.settings stores uiTheme, uiThemeCustomVars, customUIThemes,
+eventThemeOverrides, customEventThemes.
+Always call applyUITheme() + injectEventThemeCSS() together.
+
+Conventions:
+ES modules, state in app.js, saveData() for persistence,
+modals use history API, esc() for user content,
+touch-first interactions, CSS variables everywhere.
+
+Bug fixes + UI updates:
+- Clear all data removes repeat occurrences
+- Clear day deletes repeat occurrences
+- Stabilise reminders
+- Move undo/redo to top of main menu
+- Remove Add Item (keep Add Event)
+- Add recurring indicator in weekly view, expanded view, agenda
+- Mobile settings menu: add vertical buffer + scrolling
+- Replace settings menu with grouped collapsible layout:
+  Appearance, Calendar, Data, Sync (chevrons, compact mobile spacing)
+- Navigation: Left/Right = week; Up/Down = month; Up/Down jumps to first week of month
+- Remove Google Photos, Attach Image, Mood Tag
+
+Remaining Phase 2:
+P2-GD Google Drive Backup
+P2-7 Google Calendar Sync
+
+Coding behaviour:
+Use diff-only output.
+No full file rewrites unless requested.
+Keep answers short unless I ask for detail.
+
+At session start, ask: “Which feature would you like to work on next?”
+
+
+SMART CODE MODE (AUTO DEBUG ↔ DIFF):
+
+You must decide the mode automatically based on my request.
+
+──────────────────────────────
+MODE SELECTION
+──────────────────────────────
+
+Use DEBUG MODE if:
+- I include an error message
+- I say “why”, “broken”, “not working”, “issue”, “error”
+- Behaviour is unclear or inconsistent
+
+Use DIFF MODE if:
+- I ask to “fix”, “change”, “update”, “add”, “remove”
+- I give clear instruction what to modify
+- I reference a specific function or line to change
+
+If unsure → use DEBUG MODE first.
+
+──────────────────────────────
+DEBUG MODE (ROOT-CAUSE FIRST)
+──────────────────────────────
+
+1. ROOT CAUSE
+- Exact reason for the issue
+- Reference specific lines / variables
+
+2. WHAT IS BROKEN
+- Actual behaviour that fails
+
+3. WHY IT HAPPENS HERE
+- Tie to this code (init order, DOM, scope, events, etc)
+
+4. MINIMAL FIX OPTIONS
+- 1–2 small targeted fixes only
+- No rewrites, no restructuring
+
+Rules:
+- DO NOT output code changes yet
+- DO NOT rewrite files
+- DO NOT assume missing code — ask if needed
+
+──────────────────────────────
+DIFF MODE (SURGICAL PATCHES)
+──────────────────────────────
+
+- Output ONLY a minimal diff
+- NEVER rewrite full files unless explicitly told
+- NEVER refactor, rename, reorder, or restructure
+- NEVER modify unrelated code
+
+Context rules:
+- Include file name
+- Include function or nearest block
+- Include 2–5 REAL lines above and below change
+- NEVER invent missing context
+
+Line numbers:
+- Use them ONLY if I provided them
+- Otherwise DO NOT fabricate them
+
+STRICT FORMAT:
+
+1. File path
+2. Function/block name
+3. Diff:
+
+```diff
+@@ location @@
+  context
+- old code
++ new code
+  context

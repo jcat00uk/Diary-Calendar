@@ -1,0 +1,227 @@
+# Chronicle — Continuation Prompt
+
+Paste this entire file at the start of a new Claude Code session to pick up where we left off.
+
+---
+
+## Project
+
+**Chronicle** — a personal diary/calendar PWA. Vanilla JS (ES modules), HTML5, CSS3. No framework, no build step. Runs directly in browser. Target: mobile-first (Android primary), desktop supported.
+
+**Location:** `s:\Coding\Diary Calendar\`
+
+**File structure:**
+```
+index.html
+js/
+  app.js            — state, rendering, modals, navigation, orchestration
+  calendar.js       — date math helpers
+  diary.js          — diary contenteditable, autosave, format toolbar singleton
+  events.js         — add/update/delete/toggle, series (recurring), occurrence generation
+  gestures.js       — long-press (touch + mouse)
+  holidays.js       — UK bank holidays computation (England & Wales), Easter algorithm
+  ical.js           — iCal (.ics) export builder
+  notifications.js  — Web Notifications API scheduling
+  sync.js           — dirty-flag / Google Drive stub (not yet implemented)
+  themes.js         — theme data (built-in UI + event themes), CSS injection
+  themeEditor.js    — theme editor bottom sheet (3 tabs + HSV colour picker)
+  undo.js           — undo/redo stack
+css/
+  base.css          — CSS variables, reset, typography
+  ribbon.css        — top header/ribbon buttons
+  week-view.css     — week grid layout
+  day-card.css      — day cards, diary area, format toolbar
+  expanded-day.css  — full-screen day overlay
+  modals.css        — bottom sheets, settings dropdown, date picker, quick actions
+  agenda.css        — agenda/events list panel
+  themes.css        — theme editor sheet + HSV picker styles
+  responsive.css    — max-width 480px centering, desktop border
+assets/
+  icons.svg         — SVG sprite
+```
+
+---
+
+## Phase 1 — Complete
+
+Week grid (Mon-start and Sun-start), day cards, navigation (edge arrows), long-press quick actions sheet, expanded day overlay, format toolbar (bold/italic/underline/highlight/text colour with custom HSV picker), add-event modal, settings dropdown, agenda panel, date picker, back-button history API (all modals), undo/redo, dark mode, midnight refresh, localStorage persistence.
+
+---
+
+## Phase 2 — Complete
+
+### P2-1: UK Bank Holidays
+- `holidays.js` computes England & Wales bank holidays algorithmically (no hardcoded list)
+- Amber badge on day cards; amber banner in expanded view
+- Settings toggle On/Off + "Manage bank holidays" modal (per-holiday show/hide, grouped by year, current + next 2 years)
+- Stored as `data.settings.holidays = { enabled: bool, hidden: string[] }` — not stored as events
+
+### P2-3: Full-Text Search
+- Search across diary text + event/todo/reminder titles and notes
+- Grouped results by date, snippet highlighting, tap navigates to week + opens expanded day
+- Debounced input, mobile-compatible
+
+### P2-4: Repeat Events
+- daily/weekly/monthly/yearly with interval, end by date/count/never
+- Per-occurrence exceptions, edit/delete single or entire series
+- Recurring events live in `state.data.series[]`; virtual occurrences generated on-the-fly by `generateOccurrencesForSeries()` in `events.js` — never stored per-day
+- Agenda shows recurring events within a configurable window (Before/After settings)
+
+### P2-5: System Notifications
+- `scheduleReminders()` clears/re-registers `setTimeout` calls for events with `reminderMinutes` within next 24h
+- Permission requested on first use, surfaced in settings
+
+### P2-6: iCal Export
+- Exports all events + recurring series as `.ics` (VEVENT + RRULE)
+- Settings → "Export iCal (.ics)"
+
+### P2-8: Day Navigation in Expanded View
+- Prev/next day chevron buttons in expanded overlay header
+- Navigating replaces history entry so Back always returns to week grid
+
+### P2-10: Custom In-Page Colour Picker
+- HSV canvas + hue bar + hex input + Apply/Cancel — replaces `<input type="color">` which is broken on Android
+- Integrated into the diary format toolbar text-colour flow
+
+### P2-2: Colour Themes ← implemented in the most recent sessions
+See full detail in the section below.
+
+---
+
+## P2-2: Colour Themes — Full Detail
+
+This was the most recently implemented feature. Read `js/themes.js` and `js/themeEditor.js` before working on anything theme-related.
+
+### Data model (stored in `data.settings`)
+```js
+{
+  uiTheme: 'default',            // active UI theme id
+  uiThemeCustomVars: {           // per-session colour overrides on top of base theme
+    light: { '--bg-primary': '#fff', ... },
+    dark:  { '--bg-primary': '#111', ... },
+  },
+  customUIThemes: [              // user-saved named themes
+    { id: 'custom-1234', name: 'My Theme', swatch: '#cfdff2', light: {...12 vars}, dark: {...12 vars} }
+  ],
+  eventThemeOverrides: {},       // per-id overrides for built-in event themes (currently unused)
+  customEventThemes: [],         // user-created event themes
+}
+```
+
+### Built-in UI themes (in `themes.js`)
+5 themes: Default, Warm, Forest, Slate, Hi-Contrast. Each has `light` and `dark` variants with 12 CSS variables:
+`--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--day-card-bg`, `--day-card-bg-weekend`, `--day-header-bg`, `--day-header-bg-weekend`, `--text-primary`, `--text-secondary`, `--text-tertiary`, `--today-border`, `--today-text`
+
+### Built-in event themes (in `themes.js`)
+5 themes: Birthday, Work, Holiday, Personal, Appointment. Each has `light: {bg, text}` and `dark: {bg, text}`.
+
+### CSS injection
+- `applyUITheme(settings)` → injects `<style id="chronicle-ui-theme">` with `:root{...}` and `body.dark{...}`. Also clears any inline CSS variable overrides on `documentElement.style` left by live picker previews before injecting.
+- `injectEventThemeCSS(settings)` → injects `<style id="chronicle-event-themes">` with rules for `.event-pill--theme-X`, `.todo-item--theme-X`, `.expanded-event-item--theme-X`, `.agenda-item--theme-X`
+- Both style tags appended to `<head>` after linked stylesheets — no `!important` needed; cascade priority comes from specificity + injection order.
+
+### Theme editor (bottom sheet, `themeEditor.js`)
+- 54dvh half-screen sheet, z-index 310, 3 tabs: **Presets** | **UI Colours** | **Events**
+- **Footer:** Cancel | Done — "Done" commits live changes to storage via `_onEditorSave()`; "Cancel" reverts settings to `_originalSettings` deep clone
+- **Presets tab:** swatch grid derived from `--day-header-bg` of each theme's light/dark vars (dynamically computed, not stale stored value). Delete (custom only) with confirm → falls back to Default if deleted theme was active. Import JSON.
+- **UI Colours tab:** grouped variable rows, each opens HSV picker for live preview. Sticky action bar at panel bottom with: Update button (custom themes only) | Save as button. Hint text explains the difference. Export button in header.
+- **Events tab:** list of all event themes, expandable row per theme to edit bg+text for light+dark. Built-in themes: Save always creates a new custom theme (cannot overwrite builtins). Custom themes: Save in-place. Name validation: non-empty, no duplicates (case-insensitive).
+
+### HSV colour picker (`themeEditor.js`, `css/themes.css`)
+- Overlay (z-index 400), card slides up from bottom
+- SV canvas (260×160 CSS, `height="160"` attribute) + hue strip (260×18)
+- **Two-row bottom layout**: hex+preview on top row, Cancel+Apply full-width below — prevents Apply going off-screen on small devices
+- `max-height: min(85dvh, 420px); overflow-y: auto` on picker card
+
+### Event theme in add/edit modal
+- `<select id="evtTheme">` replaced with `<input type="hidden" id="evtTheme">` + pill buttons row (`#evtThemePills`)
+- Pills show each theme's actual bg/text colours; clicking a pill updates hidden input and applies colours to the `#evtTitle` contenteditable for live preview
+- `const isEdit = !!existing?.id` — fix: the quick-actions "Add Todo" path passes `{ type: 'todo', ... }` with no `id`, so `isEdit` must be `false` for new items
+
+### Quick actions — mobile undo/redo
+- Undo ↩ and Redo ↪ entries added to quick actions sheet (long-press on a day)
+- Greyed/disabled via `.quick-action-item--disabled` when stack is empty
+
+### Delete confirmations
+All three delete paths now have `confirm("Delete "title"?")`:
+1. Expanded day view `[data-delete]` handler
+2. Todo label inline detail popup (week grid)
+3. Event pill inline detail popup (week grid)
+
+---
+
+## Phase 2 — Remaining
+
+### P2-9: Mood Tags
+- Emoji mood selector (😊 😐 😔 😤 😴) in expanded day view
+- Stored as `days[dateKey].mood`
+- Small mood indicator on day card
+
+### P2-GD: Google Drive Backup ← **do this before Google Calendar**
+- OAuth 2.0 PKCE flow (web app, no backend) — user has existing OAuth code from a previous project to reference
+- Read/write a single JSON file (`chronicle_data.json`) to user's Drive
+- Completes the existing dirty-flag stub in `sync.js`
+- Show last-sync timestamp in settings (UI stub already exists)
+- On load: if Drive file newer than localStorage, pull from Drive; otherwise push localStorage → Drive
+- Conflict strategy: last-write-wins for MVP
+
+### P2-7: Google Calendar Sync ← **after Google Drive**
+- OAuth 2.0 PKCE flow — shares auth infrastructure with Google Drive (same `gapi` / token handling)
+- Two-way sync of events and todos to/from Google Calendar
+- Recurring series need RRULE mapping in both directions
+- Scaffold auth flow first, then read (import GCal → Chronicle), then write (Chronicle → GCal)
+- Handle GCal event IDs — store `gcalId` on Chronicle events so updates don't create duplicates
+
+---
+
+## Android Integration Plans
+
+Chronicle is designed to eventually be wrapped as a native Android app (likely via a WebView or TWA — Trusted Web Activity). Keep these constraints in mind when implementing new features:
+
+- **No browser-specific APIs** without a fallback (e.g. Web Share API — check `navigator.share` support)
+- **Service Worker / offline first** — all JS/CSS/assets should be cacheable; Google API calls are the only network dependency
+- **OAuth redirect URI** — the PKCE flow must handle both web (`https://...`) and Android (`com.example.chronicle:/callback`) redirect URIs. Plan for this when implementing Google auth.
+- **Touch targets** — minimum 44px tap targets everywhere; no hover-only interactions
+- **Safe area insets** — already handled via `var(--safe-top)` and `var(--safe-bottom)` CSS variables
+- **No `alert()`/`confirm()` in production Android WebView** — these are blocked by default. Replace with custom modal dialogs before Android release. Currently `confirm()` is used for delete confirmations — this is a known tech debt item.
+- **localStorage** — available in Android WebView; data persistence is fine for MVP. Google Drive sync will be the cloud backup layer.
+- **File download** (`a.href = url; a.click()`) — works in browser but not in WebView. Will need `Android.downloadFile(content, filename)` JavaScript bridge for iCal/JSON export on Android.
+- **Notifications API** — not available in standard WebView; will need a native Android notification bridge for reminders.
+
+---
+
+## Key Patterns & Conventions
+
+- **No build step** — plain ES modules. All imports are relative paths.
+- **State** lives in `app.js`: `state.data`, `state.today`, `state.currentWeekStart`
+- **Save** = `saveData()` → `localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data))`
+- **Modals** push `history.pushState({ chronicle: 'modal', modal: 'name' }, '')` on open; close via `history.back()` → `popstate` handler dispatches to the right close function
+- **Event/todo titles** stored as HTML (rich text from contenteditable); render with `evt.title` directly in innerHTML; strip with `stripHTML()` before search/export/notifications
+- **Comments** only for non-obvious WHY — never WHAT or HOW
+- **No emojis** in UI text (emojis used as icons only where already present)
+- **CSS variables** everywhere — defined in `base.css :root` and `body.dark`
+- **`esc(str)`** — always escape user content before inserting into innerHTML — EXCEPT `evt.title` (already safe HTML from contenteditable)
+- **Gestures** use touch events (`touchstart`/`touchend`) for mobile reliability; no pointer events at grid level
+- **Format toolbar** is a singleton attached to `document.body`; activates on `.diary-area`, `.expanded-diary-area`, and `.event-title-input`
+- **`refreshVisibleWeekCards()`** — refreshes only the events-strip; call `renderWeekGrid()` when badges or structural card content changes
+- **Holiday data** — `data.settings.holidays = { enabled, hidden[] }` — not stored as events
+- **Theme application** — call both `applyUITheme(settings)` and `injectEventThemeCSS(settings)` whenever settings change; never call one without the other
+
+---
+
+## Session Start Instruction
+
+At the start of each new session, present the remaining Phase 2 list and ask:
+
+> "Which feature would you like to work on next?"
+
+Do not begin implementing until the user confirms their choice.
+
+
+----------
+clear all data doesn't clear todo/event repeat occurrences 
+undo/redo icons should be in the header ribbon b4 the search icon
+clear day doesn't delete repeat occurrences on that day
+expanded view has add item and add even which replicate function, remove add item
+todo/events should have a little indicator next to them if they are a recurring event
+

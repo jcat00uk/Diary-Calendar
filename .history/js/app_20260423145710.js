@@ -16,7 +16,6 @@ import {
   deleteEvent,
   toggleTodo,
   getEventsForDate,
-  generateOccurrencesForSeries,
   createRepeatRule,
 } from './events.js'
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
@@ -323,14 +322,12 @@ function buildCardHTML(date, dateKey) {
         <span class="todo-label">${evt.title}</span>
       </div>`;
     }
-    const timeStr  = evt.time ? `${evt.time} ` : '';
-    const bell     = evt.reminderMinutes != null
+    const timeStr = evt.time ? `${evt.time} ` : '';
+    const bell    = evt.reminderMinutes != null
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
-    const repeat   = evt.isOccurrence
-      ? `<span class="pill-repeat" aria-label="Recurring">↻</span>` : '';
     return `<div class="event-pill event-pill--${esc(evt.type)}${themePillClass(evt.theme)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
-      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}${repeat}
+      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
   }).join('');
 
@@ -369,14 +366,12 @@ function refreshCardEvents(dateKey) {
         <span class="todo-label">${evt.title}</span>
       </div>`;
     }
-    const timeStr  = evt.time ? `${evt.time} ` : '';
-    const bell     = evt.reminderMinutes != null
+    const timeStr = evt.time ? `${evt.time} ` : '';
+    const bell    = evt.reminderMinutes != null
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
-    const repeat   = evt.isOccurrence
-      ? `<span class="pill-repeat" aria-label="Recurring">↻</span>` : '';
     return `<div class="event-pill event-pill--${esc(evt.type)}${themePillClass(evt.theme)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
-      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}${repeat}
+      <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}
     </div>`;
   }).join('') + (extra > 0
     ? `<div class="events-more">${STRINGS.moreEvents.replace('{n}', extra)}</div>`
@@ -385,7 +380,7 @@ function refreshCardEvents(dateKey) {
 
 /** Refresh all 7 day-card event strips currently rendered on screen */
 function refreshVisibleWeekCards() {
-  getDaysOfWeek(state.currentWeekStart).forEach(d => refreshCardEvents(formatDate(d)));
+  getDaysOfWeek(state.).forEach(d => refreshCardEvents(formatDate(d)));
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
@@ -400,28 +395,6 @@ function prevWeek()   { state.currentWeekStart = navigateWeek(state.currentWeekS
 function nextWeek()   { state.currentWeekStart = navigateWeek(state.currentWeekStart,  1); renderWeekGrid(); }
 function prevMonth()  { state.currentWeekStart = navigateMonth(state.currentWeekStart, -1, state.data.settings.weekStart); renderWeekGrid(); }
 function nextMonth()  { state.currentWeekStart = navigateMonth(state.currentWeekStart,  1, state.data.settings.weekStart); renderWeekGrid(); }
-
-function prevMonthFirst() {
-  const mid = getDaysOfWeek(state.currentWeekStart)[3];
-  let target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() - 1, 1), state.data.settings.weekStart);
-  if (target.getTime() === state.currentWeekStart.getTime())
-    target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() - 2, 1), state.data.settings.weekStart);
-  state.currentWeekStart = target;
-  renderWeekGrid();
-}
-function nextMonthFirst() {
-  const mid = getDaysOfWeek(state.currentWeekStart)[3];
-  let target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + 1, 1), state.data.settings.weekStart);
-  if (target.getTime() === state.currentWeekStart.getTime())
-  target = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + 2, 1), state.data.settings.weekStart);
-state.currentWeekStart = target;
-  renderWeekGrid();
-}
-function anyModalOpen() {
-  return !!(isThemeEditorOpen() || _expandedOverlay || _addEventSheet || _qaSheet ||
-            _settingsDropdown || _datepickerOverlay || _searchSheet ||
-            document.getElementById('agendaPanel')?.classList.contains('open'));
-}
 
 // ── Expanded day view ──────────────────────────────────────────────────────
 
@@ -472,6 +445,7 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
       <div class="expanded-section">
         <div class="expanded-section-header">${STRINGS.eventSection}</div>
         <div class="expanded-event-list" id="expandedEventList"></div>
+        <div class="expanded-add-item" role="button" tabindex="0">+ Add item</div>
       </div>
       <div class="expanded-section expanded-diary-section">
         <div class="expanded-section-header">
@@ -485,6 +459,16 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
         <span class="rotated-text">${esc(nextLabel)}</span>
         <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>
+    </div>
+    <div class="expanded-stubs">
+      <button class="expanded-stub-btn" disabled aria-label="${STRINGS.attachImage} (coming soon)">
+        <svg class="icon"><use href="assets/icons.svg#icon-image"/></svg>
+        ${STRINGS.attachImage}
+      </button>
+      <button class="expanded-stub-btn" disabled aria-label="${STRINGS.moodTag} (coming soon)">
+        <svg class="icon"><use href="assets/icons.svg#icon-smile"/></svg>
+        ${STRINGS.moodTag}
+      </button>
     </div>
   `;
 
@@ -539,6 +523,10 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
     history.back();
     setTimeout(() => openAddEventModal(dateKey), 350);
   });
+  overlay.querySelector('.expanded-add-item').addEventListener('click', () => {
+    history.back();
+    setTimeout(() => openAddEventModal(dateKey), 350);
+  });
 
 
   requestAnimationFrame(() => overlay.classList.add('open'));
@@ -551,7 +539,7 @@ function renderExpandedEvents(overlay, dateKey) {
   const events = getEventsForDate(state.data, dateKey);
 
   list.innerHTML = events.length === 0
-    ? `<div class="expanded-empty">No entries yet. Tap "+ Add Event" Above.</div>`
+    ? `<div class="expanded-empty">No entries yet. Tap "+ Add item" below.</div>`
     : events.map(evt => {
         const bell = evt.reminderMinutes != null
           ? `<span class="reminder-icon" title="${evt.reminderMinutes}min reminder">🔔</span>` : '';
@@ -563,7 +551,7 @@ function renderExpandedEvents(overlay, dateKey) {
                       data-check="${esc(evt.id)}" aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">
                 ${evt.done ? '✓' : ''}
               </button>
-              <span class="expanded-todo-label">${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}</span>
+              <span class="expanded-todo-label">${evt.title}</span>
               <div class="expanded-item-actions">
                 ${bell}
                 <button class="expanded-event-edit"   data-edit="${esc(evt.id)}"   aria-label="Edit">Edit</button>
@@ -579,7 +567,7 @@ function renderExpandedEvents(overlay, dateKey) {
           <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
             <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
             <div class="expanded-event-content">
-              <div class="expanded-event-title">${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}</div>
+              <div class="expanded-event-title">${evt.title}</div>
               ${time}
             </div>
             <div class="expanded-item-actions">
@@ -1212,14 +1200,6 @@ function openQuickActions(dateKey) {
       <button class="sheet-cancel" id="qaCancel">${STRINGS.cancel}</button>
     </div>
     <div class="quick-actions">
-      <div class="quick-action-item${canUndo() ? '' : ' quick-action-item--disabled'}" data-action="undo" role="button" tabindex="0">
-        <div class="quick-action-icon" style="font-size:16px;">↩</div>
-        Undo
-      </div>
-      <div class="quick-action-item${canRedo() ? '' : ' quick-action-item--disabled'}" data-action="redo" role="button" tabindex="0">
-        <div class="quick-action-icon" style="font-size:16px;">↪</div>
-        Redo
-      </div>
       <div class="quick-action-item" data-action="event" role="button" tabindex="0">
         <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-calendar"/></svg></div>
         ${STRINGS.addEvent}
@@ -1239,6 +1219,14 @@ function openQuickActions(dateKey) {
       <div class="quick-action-item quick-action-item--destructive" data-action="clear" role="button" tabindex="0">
         <div class="quick-action-icon"><svg class="icon"><use href="assets/icons.svg#icon-trash"/></svg></div>
         ${STRINGS.clearDay}
+      </div>
+      <div class="quick-action-item${canUndo() ? '' : ' quick-action-item--disabled'}" data-action="undo" role="button" tabindex="0">
+        <div class="quick-action-icon" style="font-size:16px;">↩</div>
+        Undo
+      </div>
+      <div class="quick-action-item${canRedo() ? '' : ' quick-action-item--disabled'}" data-action="redo" role="button" tabindex="0">
+        <div class="quick-action-icon" style="font-size:16px;">↪</div>
+        Redo
       </div>
     </div>
   `;
@@ -1277,12 +1265,6 @@ function handleQuickAction(action, dateKey, date) {
         if (state.data.days[dateKey]) {
           state.data.days[dateKey].events = [];
           state.data.days[dateKey].diary  = '';
-        }
-        for (const s of state.data.series) {
-          if (generateOccurrencesForSeries(s, dateKey)) {
-            if (!s.exceptions) s.exceptions = {};
-            s.exceptions[dateKey] = null;
-          }
         }
         saveData();
         renderWeekGrid();
@@ -1375,151 +1357,112 @@ function openSettingsDropdown() {
   `;
 
   dropdown.innerHTML = `
-    <div class="settings-group open" id="sg-undo">
-      <div class="settings-group-body" style="display:block">
-        <div class="settings-section">
-          <div class="settings-row${canUndo() ? '' : ' quick-action-item--disabled'}" data-action="undo" style="cursor:${canUndo() ? 'pointer' : 'default'}">
-            <span class="settings-action" style="font-size:14px">↩ Undo</span>
+    <div class="settings-section">
+      <div class="settings-row">
+        <div class="settings-label">Appearance</div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${theme === 'light' ? 'active' : ''}" data-theme="light">Light</div>
+          <div class="toggle-pill-btn ${theme === 'dark'  ? 'active' : ''}" data-theme="dark">Dark</div>
+        </div>
+      </div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div class="settings-label">Colour theme</div>
+        ${swatchRowHTML}
+      </div>
+      <div class="settings-row" data-action="openThemeEditor"><span class="settings-action">Customise themes…</span></div>
+      <div class="settings-row">
+        <div class="settings-label">Week starts</div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${weekStart === 'mon' ? 'active' : ''}" data-week="mon">Mon</div>
+          <div class="toggle-pill-btn ${weekStart === 'sun' ? 'active' : ''}" data-week="sun">Sun</div>
+        </div>
+      </div>
+      <div class="settings-row" style="gap:6px">
+        <div>
+          <div class="settings-label">FY Week 1 start</div>
+          <div class="settings-sublabel">Financial year week numbering</div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+          <select id="settingsFyMonth" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
+            ${fyMonthOptions}
+          </select>
+          <input id="settingsFyDay" type="number" min="1" max="31" value="${fyStartDay}"
+                 style="width:42px;font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center">
+        </div>
+      </div>
+    </div>
+      <div class="settings-row" style="gap:6px">
+        <div>
+          <div class="settings-label">Agenda date range</div>
+          <div class="settings-sublabel">Recurring events shown in agenda</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-shrink:0">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <span style="font-size:10px;color:var(--text-tertiary)">Before</span>
+            <select id="settingsAgendaBefore" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
+              <option value="0"  ${agendaBeforeDays === 0  ? 'selected' : ''}>None</option>
+              <option value="7"  ${agendaBeforeDays === 7  ? 'selected' : ''}>1 wk</option>
+              <option value="14" ${agendaBeforeDays === 14 ? 'selected' : ''}>2 wks</option>
+            </select>
           </div>
-          <div class="settings-row${canRedo() ? '' : ' quick-action-item--disabled'}" data-action="redo" style="cursor:${canRedo() ? 'pointer' : 'default'}">
-            <span class="settings-action" style="font-size:14px">↪ Redo</span>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <span style="font-size:10px;color:var(--text-tertiary)">After</span>
+            <select id="settingsAgendaAhead" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
+              <option value="7"   ${agendaAheadDays === 7   ? 'selected' : ''}>1 wk</option>
+              <option value="14"  ${agendaAheadDays === 14  ? 'selected' : ''}>2 wks</option>
+              <option value="30"  ${agendaAheadDays === 30  ? 'selected' : ''}>1 mo</option>
+              <option value="60"  ${agendaAheadDays === 60  ? 'selected' : ''}>2 mo</option>
+              <option value="180" ${agendaAheadDays === 180 ? 'selected' : ''}>6 mo</option>
+              <option value="365" ${agendaAheadDays === 365 ? 'selected' : ''}>1 yr</option>
+            </select>
           </div>
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-appearance">
-      <div class="settings-group-header" data-toggle="sg-appearance">
-        <span class="settings-group-label">Appearance</span>
-        <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
-      </div>
-      <div class="settings-group-body">
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-label">Theme</div>
-            <div class="toggle-pill">
-              <div class="toggle-pill-btn ${theme === 'light' ? 'active' : ''}" data-theme="light">Light</div>
-              <div class="toggle-pill-btn ${theme === 'dark'  ? 'active' : ''}" data-theme="dark">Dark</div>
-            </div>
-          </div>
-          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px">
-            <div class="settings-label">Colour theme</div>
-            ${swatchRowHTML}
-          </div>
-          <div class="settings-row" data-action="openThemeEditor"><span class="settings-action">Customise themes…</span></div>
-        </div>
-      </div>
+    <div class="settings-section">
+      <div class="settings-row" data-action="export"><span class="settings-action">Export JSON</span></div>
+      <div class="settings-row" data-action="exportIcal"><span class="settings-action">Export iCal (.ics)</span></div>
+      <div class="settings-row" data-action="import"><span class="settings-action">Import JSON</span></div>
+      <div class="settings-row" data-action="clearall"><span class="settings-action settings-action--destructive">Clear all data</span></div>
     </div>
-    <div class="settings-group open" id="sg-calendar">
-      <div class="settings-group-header" data-toggle="sg-calendar">
-        <span class="settings-group-label">Calendar</span>
-        <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
-      </div>
-      <div class="settings-group-body">
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-label">Week starts</div>
-            <div class="toggle-pill">
-              <div class="toggle-pill-btn ${weekStart === 'mon' ? 'active' : ''}" data-week="mon">Mon</div>
-              <div class="toggle-pill-btn ${weekStart === 'sun' ? 'active' : ''}" data-week="sun">Sun</div>
-            </div>
-          </div>
-          <div class="settings-row" style="gap:6px">
-            <div>
-              <div class="settings-label">FY Week 1 start</div>
-              <div class="settings-sublabel">Financial year week numbering</div>
-            </div>
-            <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-              <select id="settingsFyMonth" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-                ${fyMonthOptions}
-              </select>
-              <input id="settingsFyDay" type="number" min="1" max="31" value="${fyStartDay}"
-                     style="width:42px;font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);text-align:center">
-            </div>
-          </div>
-          <div class="settings-row" style="gap:6px">
-            <div>
-              <div class="settings-label">Agenda date range</div>
-              <div class="settings-sublabel">Recurring events shown in agenda</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:flex-end;flex-shrink:0">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="font-size:10px;color:var(--text-tertiary)">Before</span>
-                <select id="settingsAgendaBefore" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-                  <option value="0"  ${agendaBeforeDays === 0  ? 'selected' : ''}>None</option>
-                  <option value="7"  ${agendaBeforeDays === 7  ? 'selected' : ''}>1 wk</option>
-                  <option value="14" ${agendaBeforeDays === 14 ? 'selected' : ''}>2 wks</option>
-                </select>
-              </div>
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="font-size:10px;color:var(--text-tertiary)">After</span>
-                <select id="settingsAgendaAhead" style="font-size:11px;padding:3px 5px;border:0.5px solid var(--color-border-strong);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary)">
-                  <option value="7"   ${agendaAheadDays === 7   ? 'selected' : ''}>1 wk</option>
-                  <option value="14"  ${agendaAheadDays === 14  ? 'selected' : ''}>2 wks</option>
-                  <option value="30"  ${agendaAheadDays === 30  ? 'selected' : ''}>1 mo</option>
-                  <option value="60"  ${agendaAheadDays === 60  ? 'selected' : ''}>2 mo</option>
-                  <option value="180" ${agendaAheadDays === 180 ? 'selected' : ''}>6 mo</option>
-                  <option value="365" ${agendaAheadDays === 365 ? 'selected' : ''}>1 yr</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-label">UK Bank Holidays</div>
-            <div class="toggle-pill">
-              <div class="toggle-pill-btn ${holidaySettings.enabled  ? 'active' : ''}" data-holidays="on">On</div>
-              <div class="toggle-pill-btn ${!holidaySettings.enabled ? 'active' : ''}" data-holidays="off">Off</div>
-            </div>
-          </div>
-          <div class="settings-row" data-action="manageHolidays"><span class="settings-action">Manage bank holidays</span></div>
-          <div class="settings-row" data-action="about"><span class="settings-action">About / Help</span></div>
+    <div class="settings-section">
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Notifications</div>
+          ${typeof Notification !== 'undefined' && Notification.permission === 'denied'
+            ? '<div class="settings-sublabel settings-sublabel--warn">Blocked by browser — allow in site settings</div>'
+            : ''}
+        </div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${notifications  ? 'active' : ''}" data-notif="on">On</div>
+          <div class="toggle-pill-btn ${!notifications ? 'active' : ''}" data-notif="off">Off</div>
         </div>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Google Drive</div>
+          <div class="settings-sublabel">${esc(lastSyncStr)}</div>
+        </div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${gdrive.enabled  ? 'active' : ''}" data-gdrive="on">On</div>
+          <div class="toggle-pill-btn ${!gdrive.enabled ? 'active' : ''}" data-gdrive="off">Off</div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">UK Bank Holidays</div>
+        <div class="toggle-pill">
+          <div class="toggle-pill-btn ${holidaySettings.enabled  ? 'active' : ''}" data-holidays="on">On</div>
+          <div class="toggle-pill-btn ${!holidaySettings.enabled ? 'active' : ''}" data-holidays="off">Off</div>
+        </div>
+      </div>
+      <div class="settings-row" data-action="manageHolidays"><span class="settings-action">Manage bank holidays</span></div>
+      <div class="settings-row" data-action="about"><span class="settings-action">About / Help</span></div>
     </div>
-    <div class="settings-group open" id="sg-data">
-      <div class="settings-group-header" data-toggle="sg-data">
-        <span class="settings-group-label">Data</span>
-        <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
+    <div class="settings-section">
+      <div class="settings-row" style="cursor:default">
+        <span class="settings-label" style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.06em">Coming soon</span>
       </div>
-      <div class="settings-group-body">
-        <div class="settings-section">
-          <div class="settings-row" data-action="export"><span class="settings-action">Export JSON</span></div>
-          <div class="settings-row" data-action="exportIcal"><span class="settings-action">Export iCal (.ics)</span></div>
-          <div class="settings-row" data-action="import"><span class="settings-action">Import JSON</span></div>
-          <div class="settings-row" data-action="clearall"><span class="settings-action settings-action--destructive">Clear all data</span></div>
-        </div>
-      </div>
-    </div>
-    <div class="settings-group open" id="sg-sync">
-      <div class="settings-group-header" data-toggle="sg-sync">
-        <span class="settings-group-label">Sync</span>
-        <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
-      </div>
-      <div class="settings-group-body">
-        <div class="settings-section">
-          <div class="settings-row">
-            <div>
-              <div class="settings-label">Notifications</div>
-              ${typeof Notification !== 'undefined' && Notification.permission === 'denied'
-                ? '<div class="settings-sublabel settings-sublabel--warn">Blocked by browser — allow in site settings</div>'
-                : ''}
-            </div>
-            <div class="toggle-pill">
-              <div class="toggle-pill-btn ${notifications  ? 'active' : ''}" data-notif="on">On</div>
-              <div class="toggle-pill-btn ${!notifications ? 'active' : ''}" data-notif="off">Off</div>
-            </div>
-          </div>
-          <div class="settings-row">
-            <div>
-              <div class="settings-label">Google Drive</div>
-              <div class="settings-sublabel">${esc(lastSyncStr)}</div>
-            </div>
-            <div class="toggle-pill">
-              <div class="toggle-pill-btn ${gdrive.enabled  ? 'active' : ''}" data-gdrive="on">On</div>
-              <div class="toggle-pill-btn ${!gdrive.enabled ? 'active' : ''}" data-gdrive="off">Off</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="settings-row"><span class="settings-label">Google Photos</span><span class="badge-soon">Soon</span></div>
     </div>
   `;
 
@@ -1622,12 +1565,6 @@ function openSettingsDropdown() {
     });
   });
 
-  dropdown.querySelectorAll('[data-toggle]').forEach(header => {
-    header.addEventListener('click', () => {
-      document.getElementById(header.dataset.toggle)?.classList.toggle('open');
-    });
-  });
-
   requestAnimationFrame(() => dropdown.classList.add('open'));
 }
 
@@ -1666,16 +1603,13 @@ function handleSettingsAction(action) {
 
     case 'clearall':
       if (confirm(STRINGS.confirmClearAll)) {
-        state.data.days   = {};
-        state.data.series = [];
+        state.data.days = {};
         saveData(); renderWeekGrid();
         showToast('All data cleared');
       }
       break;
 
     case 'about': showToast(STRINGS.aboutText); break;
-    case 'undo':  handleUndo(); break;
-    case 'redo':  handleRedo(); break;
   }
 }
 
@@ -1908,7 +1842,7 @@ function renderAgendaList(filter) {
         </div>
         <div class="agenda-item__body">
           <div class="agenda-item__title ${doneClass}">${evt.title}</div>
-          <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}${bellIcon}</div>
+          <div class="agenda-item__date">${esc(dateStr)}${evt.time ? ' · ' + esc(evt.time) : ''}${bellIcon}</div>
         </div>
         ${todoBtn}
         <svg class="icon agenda-item__chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -2343,11 +2277,11 @@ function init() {
   });
   document.getElementById('btnSettings').addEventListener('click', openSettingsDropdown);
 
-  // ── Edge nav arrows (Left/Right = week, Up/Down = first of month) ──
-  document.getElementById('navPrevWeek').addEventListener('click', prevMonthFirst);
-  document.getElementById('navNextWeek').addEventListener('click', nextMonthFirst);
-  document.getElementById('navPrevMonth').addEventListener('click', prevWeek);
-  document.getElementById('navNextMonth').addEventListener('click', nextWeek);
+  // ── Edge nav arrows ──
+  document.getElementById('navPrevWeek').addEventListener('click', prevWeek);
+  document.getElementById('navNextWeek').addEventListener('click', nextWeek);
+  document.getElementById('navPrevMonth').addEventListener('click', prevMonth);
+  document.getElementById('navNextMonth').addEventListener('click', nextMonth);
 
   // ── Agenda panel controls ──
   document.getElementById('btnAgendaClose').addEventListener('click', () => history.back());
@@ -2542,21 +2476,6 @@ function init() {
       closeDatePicker();
       closeAgendaPanel();
     }
-    if (!mod && !anyModalOpen()) {
-      const isTyping = document.activeElement &&
-        (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) ||
-         document.activeElement.isContentEditable);
-      if (!isTyping) {
-        if (e.key === 'ArrowLeft')  { prevWeek();       return; }
-        if (e.key === 'ArrowRight') { nextWeek();       return; }
-        if (e.key === 'ArrowUp')    { prevMonthFirst(); return; }
-        if (e.key === 'ArrowDown')  { nextMonthFirst(); return; }
-      }
-    }
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scheduleReminders(state.data);
   });
 
   scheduleNextDayRefresh();
