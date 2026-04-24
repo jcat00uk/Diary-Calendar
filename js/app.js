@@ -181,7 +181,8 @@ function saveData() {
 
 function _applyRemoteData(data) {
   state.data = data;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  state.data.settings.gdrive.lastSync = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
   markClean();
   applyUITheme(state.data.settings);
   injectEventThemeCSS(state.data.settings);

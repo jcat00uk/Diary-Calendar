@@ -1,6 +1,6 @@
 /** Chronicle — Google Drive Backup */
 
-const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata email';
 const GDRIVE_FILE  = 'chronicle-data.json';
 const CLIENT_ID    = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
 const BG_THROTTLE  = 30_000;
