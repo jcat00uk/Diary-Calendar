@@ -2375,6 +2375,11 @@ function init() {
     if (status === 'needs_client_id') {
       openSettingsDropdown();
       showToast('Paste your Google Client ID in Settings → Sync');
+    } else if (status === 'pending_sync') {
+      syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn);
+    } else if (status === 'synced') {
+      state.data.settings.gdrive.lastSync = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
     }
   });
 
