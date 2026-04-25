@@ -461,7 +461,7 @@ export async function syncToGCal(data) {
       continue;
     }
 
-    if (modified <= syncedAt) continue; // already up to date
+    if (day.diaryGCalId && modified <= syncedAt) continue; // already up to date
 
     const gcalEvt = buildDiaryGCalEvent(diaryText, dateKey);
 
