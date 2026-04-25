@@ -194,7 +194,16 @@ export async function syncNow(data, persist, onConflict, showToast) {
 
   } catch (err) {
     console.error('[Chronicle Sync]', err);
-    if (err.message === 'auth_expired')  { _statusCallback?.('unsigned'); showToast?.('Session expired — sign in again'); }
+    if (err.message === 'auth_expired') {
+      const hasConsented = localStorage.getItem('chronicle_hasConsented');
+      if (hasConsented && _tokenClient) {
+        _pendingAfterAuth = true;
+        _tokenClient.requestAccessToken({ prompt: 'none' });
+      } else {
+        _statusCallback?.('unsigned');
+        showToast?.('Session expired — sign in again');
+      }
+    }
     else if (!navigator.onLine)          { _statusCallback?.('error');    showToast?.('No internet'); }
     else                                 { _statusCallback?.('error');    showToast?.('Sync error: ' + err.message); }
   }
