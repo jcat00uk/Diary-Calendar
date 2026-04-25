@@ -160,6 +160,10 @@ export function addSeries(data, seriesData) {
     exceptions: {},                      // dateKey → override or null
     created: Date.now(),
     modified: Date.now(),
+    googleEventId:    null,
+    googleCalendarId: null,
+    syncStatus:       'pending',
+    lastSyncedAt:     null,
   };
 
   data.series.push(series);
@@ -366,7 +370,13 @@ export function getEventsForDate(data, dateKey, { includeContinuations = true } 
 export function updateSeries(data, seriesId, updates) {
   const idx = data.series.findIndex(s => s.id === seriesId);
   if (idx === -1) return null;
-  data.series[idx] = { ...data.series[idx], ...updates, modified: Date.now() };
+  const prev = data.series[idx];
+  data.series[idx] = {
+    ...prev,
+    ...updates,
+    modified: Date.now(),
+    syncStatus: prev.googleEventId ? 'pending' : (prev.syncStatus ?? 'pending'),
+  };
   return data.series[idx];
 }
 

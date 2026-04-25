@@ -307,6 +307,49 @@ async function ensureChronicleCalendar(data) {
 const _fmtDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+const _GCAL_DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
+
+function _buildRRule(repeat) {
+  const { freq, interval, byWeekday, end } = repeat;
+  let rule = `FREQ=${freq.toUpperCase()};INTERVAL=${interval}`;
+  if (freq === 'weekly' && byWeekday?.length) {
+    rule += `;BYDAY=${byWeekday.map(d => _GCAL_DAYS[d]).join(',')}`;
+  }
+  if (end?.type === 'after' && end.count) {
+    rule += `;COUNT=${end.count}`;
+  } else if (end?.type === 'on' && end.date) {
+    const [y, m, d] = end.date.split('-').map(Number);
+    const until = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
+    rule += `;UNTIL=${until.toISOString().replace(/[-:.]/g, '').slice(0, 15)}Z`;
+  }
+  return `RRULE:${rule}`;
+}
+
+function buildGCalRecurringEvent(series, tz) {
+  const [y, m, d] = series.startDate.split('-').map(Number);
+  let start, end;
+  if (series.time) {
+    const [h, min] = series.time.split(':').map(Number);
+    const startDate = new Date(y, m - 1, d, h, min);
+    start = { dateTime: startDate.toISOString(), timeZone: tz };
+    end   = { dateTime: new Date(startDate.getTime() + 3_600_000).toISOString(), timeZone: tz };
+  } else {
+    start = { date: series.startDate };
+    end   = { date: _fmtDate(new Date(y, m - 1, d + 1)) };
+  }
+  const gcalEvt = {
+    summary:    _plainText(series.title),
+    start, end,
+    recurrence: [_buildRRule(series.repeat)],
+    extendedProperties: { private: { chronicleId: series.id } },
+  };
+  if (series.notes) gcalEvt.description = _plainText(series.notes);
+  gcalEvt.reminders = series.reminderMinutes != null
+    ? { useDefault: false, overrides: [{ method: 'popup', minutes: series.reminderMinutes }] }
+    : { useDefault: false, overrides: [] };
+  return gcalEvt;
+}
+
 function _plainText(html) {
   if (!html || !/<[a-z]/i.test(html)) return html || '';
   const el = document.createElement('div');
@@ -459,6 +502,63 @@ export async function syncToGCal(data) {
       day.events = events.filter(e => !toRemove.includes(e.id));
     }
   }
+
+  // ── Recurring series ──────────────────────────────────────────────────────
+  for (const series of (data.series || [])) {
+    if (series.type === 'todo') continue;
+    const status = series.syncStatus ?? 'pending';
+
+    if (status === 'pending') {
+      const gcalEvt = buildGCalRecurringEvent(series, tz);
+      if (!series.googleEventId) {
+        try {
+          const resp    = await gcalRequest(
+            `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+          );
+          const created = await resp.json();
+          series.googleEventId    = created.id;
+          series.googleCalendarId = chronicleCalId;
+          series.syncStatus       = 'synced';
+          series.lastSyncedAt     = new Date().toISOString();
+        } catch (err) {
+          console.warn('[Chronicle GCal] recurring insert failed:', series.id, err.message);
+        }
+      } else {
+        const calId = series.googleCalendarId || chronicleCalId;
+        try {
+          const resp = await gcalRequest(
+            `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(series.googleEventId)}`,
+            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+          );
+          if (resp.ok) {
+            series.syncStatus   = 'synced';
+            series.lastSyncedAt = new Date().toISOString();
+          } else if (resp.status === 404 || resp.status === 410) {
+            series.googleEventId = null;
+            series.syncStatus    = 'pending';
+          }
+        } catch (err) {
+          console.warn('[Chronicle GCal] recurring patch failed:', series.id, err.message);
+        }
+      }
+    }
+  }
+
+  // ── Deleted series ────────────────────────────────────────────────────────
+  const deletedSeries = data.deletedSeriesGCalIds || [];
+  for (const { googleEventId, googleCalendarId } of deletedSeries) {
+    const calId = googleCalendarId || chronicleCalId;
+    try {
+      await gcalRequest(
+        `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(googleEventId)}`,
+        { method: 'DELETE' }
+      );
+    } catch (err) {
+      console.warn('[Chronicle GCal] recurring delete failed:', googleEventId, err.message);
+    }
+  }
+  if (deletedSeries.length) data.deletedSeriesGCalIds = [];
 
 }
 

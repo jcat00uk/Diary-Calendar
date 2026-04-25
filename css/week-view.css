@@ -175,6 +175,14 @@
   filter: brightness(0.88);
 }
 
+.multiday-bar--active {
+  filter: brightness(0.82);
+}
+
+.multiday-detail {
+  pointer-events: auto;
+}
+
 .multiday-bar-label {
   padding: 0 6px;
   font-size: 10px;

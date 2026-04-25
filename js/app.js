@@ -197,8 +197,13 @@ async function loadData() {
       if (!('lastSyncedAt'     in evt)) evt.lastSyncedAt     = null;
     }
   }
+  if (!data.deletedSeriesGCalIds) data.deletedSeriesGCalIds = [];
   for (const s of data.series) {
     if (s.type === 'reminder') s.type = 'event';
+    if (!('googleEventId'    in s)) s.googleEventId    = null;
+    if (!('googleCalendarId' in s)) s.googleCalendarId = null;
+    if (!('syncStatus'       in s)) s.syncStatus       = 'pending';
+    if (!('lastSyncedAt'     in s)) s.lastSyncedAt     = null;
   }
   return data;
 }
@@ -554,17 +559,15 @@ function renderMultidayBars() {
 
       const bar = document.createElement('div');
       bar.className = 'multiday-bar';
+      bar.dataset.evtId    = evt.id;
+      bar.dataset.startKey = startKey;
       bar.style.cssText = `top:${barTop}px;left:${firstR.left + 4}px;` +
         `width:${lastR.right - firstR.left - 8}px;height:${BAR_H}px;` +
         `background:${_getMultidayBarColor(evt)};` +
         `border-radius:${r1} ${r2} ${r2} ${r1};`;
       if (barStartsThisWeek) {
-        bar.innerHTML = `<span class="multiday-bar-label">${esc(evt.title)}</span>`;
+        bar.innerHTML = `<span class="multiday-bar-label">${esc(stripHTML(evt.title))}</span>`;
       }
-      bar.addEventListener('click', e => {
-        e.stopPropagation();
-        openAddEventModal(startKey, evt);
-      });
       overlay.appendChild(bar);
     }
   }
@@ -1574,6 +1577,13 @@ function handleRepeatDelete(evt, dateKey, action) {
   }
 
   if (action === "series") {
+    if (series.googleEventId) {
+      if (!state.data.deletedSeriesGCalIds) state.data.deletedSeriesGCalIds = [];
+      state.data.deletedSeriesGCalIds.push({
+        googleEventId:    series.googleEventId,
+        googleCalendarId: series.googleCalendarId,
+      });
+    }
     state.data.series = state.data.series.filter(s => s.id !== series.id);
     saveData();
     refreshVisibleWeekCards();
@@ -3068,11 +3078,72 @@ async function init() {
     });
   });
 
+  // ── Delegated: multi-day bar inline detail ──
+  weekGrid.addEventListener('click', e => {
+    const bar = e.target.closest('.multiday-bar');
+    if (!bar) return;
+    e.stopPropagation();
+
+    const startKey = bar.dataset.startKey;
+    const evtId    = bar.dataset.evtId;
+
+    document.querySelectorAll('.multiday-detail').forEach(d => d.remove());
+    document.querySelectorAll('.multiday-bar--active').forEach(b => b.classList.remove('multiday-bar--active'));
+
+    if (bar.classList.contains('multiday-bar--was-active')) {
+      bar.classList.remove('multiday-bar--was-active');
+      return;
+    }
+
+    const evt = state.data.days[startKey]?.events?.find(ev => ev.id === evtId);
+    if (!evt) return;
+
+    bar.classList.add('multiday-bar--active');
+
+    const overlay  = bar.closest('.multiday-overlay');
+    const barRect  = bar.getBoundingClientRect();
+    const gridRect = weekGrid.getBoundingClientRect();
+
+    const detail = document.createElement('div');
+    detail.className = 'event-detail multiday-detail';
+    detail.dataset.forId = evtId;
+    detail.style.cssText = `position:absolute;z-index:10;pointer-events:auto;` +
+      `top:${barRect.bottom - gridRect.top + 2}px;` +
+      `left:${Math.min(barRect.left - gridRect.left, gridRect.width - 180)}px;` +
+      `min-width:160px;max-width:220px;`;
+    detail.innerHTML = `
+      <div class="event-detail__title">${evt.title}</div>
+      ${evt.endDate ? `<div class="event-detail__time">${esc(startKey)} – ${esc(evt.endDate)}</div>` : ''}
+      ${evt.notes   ? `<div class="event-detail__notes">${esc(stripHTML(evt.notes))}</div>` : ''}
+      <div class="event-detail__actions">
+        <button class="event-detail__btn event-detail__edit">Edit</button>
+        <button class="event-detail__btn event-detail__delete">Delete</button>
+      </div>
+    `;
+    overlay.appendChild(detail);
+
+    detail.querySelector('.event-detail__edit').addEventListener('click', ev => {
+      ev.stopPropagation();
+      detail.remove();
+      bar.classList.remove('multiday-bar--active');
+      openAddEventModal(startKey, evt);
+    });
+    detail.querySelector('.event-detail__delete').addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (!confirm(`Delete "${stripHTML(evt.title)}"?`)) return;
+      pushUndo(JSON.parse(JSON.stringify(state.data)));
+      _deleteLocalEvent(state.data, startKey, evt);
+      saveData();
+      refreshVisibleWeekCards();
+    });
+  });
+
   // ── Click-away: close event-detail dropdown (capture phase so stopPropagation on pills doesn't block it) ──
   document.addEventListener('click', e => {
-    if (e.target.closest('.event-detail') || e.target.closest('.event-pill') || e.target.closest('.todo-label')) return;
+    if (e.target.closest('.event-detail') || e.target.closest('.event-pill') || e.target.closest('.todo-label') || e.target.closest('.multiday-bar')) return;
     document.querySelectorAll('.event-detail').forEach(d => d.remove());
     document.querySelectorAll('.event-pill--active').forEach(p => p.classList.remove('event-pill--active'));
+    document.querySelectorAll('.multiday-bar--active').forEach(b => b.classList.remove('multiday-bar--active'));
   }, true);
 
   // ── History API — back button / swipe-back closes any open overlay ──
