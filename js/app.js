@@ -439,6 +439,7 @@ function renderWeekGrid() {
         html => {
           ensureDay(dateKey);
           state.data.days[dateKey].diary = html;
+          state.data.days[dateKey].diaryModified = Date.now();
           saveData();
         },
         {

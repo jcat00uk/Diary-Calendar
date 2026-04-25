@@ -294,6 +294,36 @@ async function ensureChronicleCalendar(data) {
   return created.id;
 }
 
+// ── Diary helpers ─────────────────────────────────────────────────────────────
+
+function stripDiaryHTML(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildDiaryGCalEvent(diaryText, dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const preview    = diaryText.slice(0, 55).replace(/\n/g, ' ');
+  return {
+    summary:     `📓 ${preview}${diaryText.length > 55 ? '…' : ''}`,
+    start:       { date: dateKey },
+    end:         { date: _fmtDate(new Date(y, m - 1, d + 1)) },
+    description: diaryText,
+    extendedProperties: { private: { chronicleDiary: 'true' } },
+  };
+}
+
 // ── GCal event mapping ────────────────────────────────────────────────────────
 
 const _fmtDate = d =>
@@ -412,6 +442,45 @@ export async function syncToGCal(data) {
       day.events = events.filter(e => !toRemove.includes(e.id));
     }
   }
+
+  // ── Diary entries as all-day GCal events ──────────────────────────────────
+  for (const [dateKey, day] of Object.entries(data.days || {})) {
+    const diaryText  = day.diary ? stripDiaryHTML(day.diary) : '';
+    const modified   = day.diaryModified  || 0;
+    const syncedAt   = day.diarySyncedAt  || 0;
+
+    if (!diaryText && !day.diaryGCalId) continue;
+
+    if (!diaryText && day.diaryGCalId) {
+      await gcalRequest(
+        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
+        { method: 'DELETE' }
+      );
+      day.diaryGCalId   = null;
+      day.diarySyncedAt = null;
+      continue;
+    }
+
+    if (modified <= syncedAt) continue; // already up to date
+
+    const gcalEvt = buildDiaryGCalEvent(diaryText, dateKey);
+
+    if (!day.diaryGCalId) {
+      const resp    = await gcalRequest(
+        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+      );
+      const created     = await resp.json();
+      day.diaryGCalId   = created.id;
+      day.diarySyncedAt = Date.now();
+    } else {
+      const resp = await gcalRequest(
+        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+      );
+      if (resp.ok) day.diarySyncedAt = Date.now();
+    }
+  }
 }
 
 export async function syncFromGCal(data) {
@@ -439,6 +508,7 @@ export async function syncFromGCal(data) {
 
   for (const gcalEvt of (result.items || [])) {
     if (gcalEvt.status === 'cancelled') continue;
+    if (gcalEvt.extendedProperties?.private?.chronicleDiary === 'true') continue;
 
     const local = localByGCalId[gcalEvt.id];
     if (local) {
