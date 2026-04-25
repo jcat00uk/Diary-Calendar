@@ -307,6 +307,13 @@ async function ensureChronicleCalendar(data) {
 const _fmtDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+function _plainText(html) {
+  if (!html || !/<[a-z]/i.test(html)) return html || '';
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  return el.textContent || '';
+}
+
 function buildGCalEvent(evt, dateKey, tz) {
   const [y, m, d] = dateKey.split('-').map(Number);
 
@@ -332,13 +339,13 @@ function buildGCalEvent(evt, dateKey, tz) {
   }
 
   const gcalEvt = {
-    summary: evt.title,
+    summary: _plainText(evt.title),
     start,
     end,
     extendedProperties: { private: { chronicleId: evt.id } },
   };
 
-  if (evt.notes) gcalEvt.description = evt.notes;
+  if (evt.notes) gcalEvt.description = _plainText(evt.notes);
   gcalEvt.reminders = evt.reminderMinutes != null
     ? { useDefault: false, overrides: [{ method: 'popup', minutes: evt.reminderMinutes }] }
     : { useDefault: false, overrides: [] };
