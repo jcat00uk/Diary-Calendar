@@ -177,10 +177,31 @@
 }
 
 .agenda-empty {
-  padding: 40px 20px;
+  padding: 48px 24px;
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.agenda-empty__icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.agenda-empty__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.agenda-empty__sub {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  max-width: 220px;
 }
 
 .agenda-item--active {

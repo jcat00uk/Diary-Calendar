@@ -2,6 +2,40 @@
 
 const _debounceTimers = new Map();
 
+// ── URL auto-linker ────────────────────────────────────────────────────────
+
+const _URL_RE = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)/]/g;
+
+function _processNodeForLinks(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    _URL_RE.lastIndex = 0;
+    const text = node.textContent;
+    if (!_URL_RE.test(text)) return;
+    _URL_RE.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0, match;
+    while ((match = _URL_RE.exec(text)) !== null) {
+      if (match.index > last) frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+      const a = document.createElement('a');
+      a.href = match[0]; a.textContent = match[0];
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      frag.appendChild(a);
+      last = match.index + match[0].length;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'A') {
+    [...node.childNodes].forEach(_processNodeForLinks);
+  }
+}
+
+function _autoLinkUrls(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  [...d.childNodes].forEach(_processNodeForLinks);
+  return d.innerHTML;
+}
+
 function debounce(key, fn, delay) {
   clearTimeout(_debounceTimers.get(key));
   _debounceTimers.set(key, setTimeout(() => {
@@ -31,15 +65,23 @@ export function initDiaryArea(el, getTextFn, setTextFn, opts = {}) {
   const existing = getTextFn();
   if (existing) {
     if (/<[a-z]/i.test(existing)) {
-      el.innerHTML = existing;
+      el.innerHTML = _autoLinkUrls(existing);
     } else {
       el.textContent = existing;
     }
   }
 
-  // Use <br> for newlines so line-height stays uniform and text aligns to ruled lines
+  // Use <br> for newlines, but allow Enter to create new list items inside <ul>/<ol>
   el.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      const sel = window.getSelection();
+      if (sel?.anchorNode) {
+        let node = sel.anchorNode;
+        while (node && node !== el) {
+          if (node.nodeName === 'LI') return; // browser handles list Enter natively
+          node = node.parentNode;
+        }
+      }
       e.preventDefault();
       document.execCommand('insertLineBreak');
     }
@@ -53,10 +95,28 @@ export function initDiaryArea(el, getTextFn, setTextFn, opts = {}) {
     }, 800);
   });
 
+  el.addEventListener('blur', () => {
+    // Re-run auto-linking when user leaves the diary (catches freshly typed URLs)
+    const linked = _autoLinkUrls(el.innerHTML);
+    if (linked !== el.innerHTML) {
+      el.innerHTML = linked;
+      setTextFn(linked);
+    }
+  });
+
   el.addEventListener('focus', () => opts.onFocus?.());
 
-  // Prevent card tap-to-expand when touching the diary area
-  el.addEventListener('click',       e => e.stopPropagation());
+  // Prevent card tap-to-expand; open links with a single click when not text-selecting
+  el.addEventListener('click', e => {
+    const a = e.target.closest('a[href]');
+    if (a) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(a.href, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    e.stopPropagation();
+  });
   el.addEventListener('mousedown',   e => e.stopPropagation());
   el.addEventListener('pointerdown', e => e.stopPropagation());
 }
@@ -424,6 +484,9 @@ export function initFormatToolbar() {
       <button class="fmt-btn fmt-pick" id="fmtClrPick" aria-label="Choose text colour">▾</button>
     </div>
     <div class="fmt-sep"></div>
+    <button class="fmt-btn" data-cmd="insertUnorderedList" title="Bullet list" aria-label="Bullet list">&#8226;&#8801;</button>
+    <button class="fmt-btn" data-cmd="insertOrderedList"   title="Numbered list" aria-label="Numbered list">1&#8801;</button>
+    <div class="fmt-sep"></div>
     <button class="fmt-btn" data-cmd="removeFormat" title="Clear formatting">✕</button>
   `;
 
@@ -627,7 +690,7 @@ export function initFormatToolbar() {
 
 function _updateActiveStates() {
   if (!_toolbar) return;
-  ['bold', 'italic', 'underline'].forEach(cmd => {
+  ['bold', 'italic', 'underline', 'insertUnorderedList', 'insertOrderedList'].forEach(cmd => {
     const btn = _toolbar.querySelector(`[data-cmd="${cmd}"]`);
     if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
   });

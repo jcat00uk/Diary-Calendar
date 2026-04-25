@@ -21,6 +21,14 @@ let _statusCallback    = null;
 // Tracks throttle for fullSync; separate from GDrive bgSync throttle
 let _lastGCalSync    = 0;
 let _gcalRetryTimer  = null;
+let _gcalRetryCount  = 0;
+
+export function resetGCalThrottle() {
+  _lastGCalSync   = 0;
+  _gcalRetryCount = 0;
+  clearTimeout(_gcalRetryTimer);
+  _gcalRetryTimer = null;
+}
 
 export const gdriveState = {
   token:          null,
@@ -315,7 +323,12 @@ function buildGCalEvent(evt, dateKey, tz) {
     }
   } else {
     start = { date: dateKey };
-    end   = { date: _fmtDate(new Date(y, m - 1, d + 1)) };
+    if (evt.endDate) {
+      const [ey, em, ed] = evt.endDate.split('-').map(Number);
+      end = { date: _fmtDate(new Date(ey, em - 1, ed + 1)) }; // GCal end is exclusive
+    } else {
+      end = { date: _fmtDate(new Date(y, m - 1, d + 1)) };
+    }
   }
 
   const gcalEvt = {
@@ -543,27 +556,32 @@ export async function fullSync(data, persist, showToast, onStart, onEnd) {
     persist(data);
     markClean();
     data.settings.lastFullSync = Date.now();
+    _gcalRetryCount = 0;
     onEnd?.('success');
   } catch (err) {
     console.error('[Chronicle fullSync]', err);
     onEnd?.('error');
 
+    _gcalRetryCount++;
+    // Exponential backoff: 30s, 60s, 120s, 240s … capped at 5 min
+    const retryDelay = Math.min(30_000 * Math.pow(2, _gcalRetryCount - 1), 300_000);
+
     if (err.message === 'auth_expired') {
+      _gcalRetryCount = 0;
       _tokenClient?.requestAccessToken({ prompt: 'none' });
     } else if (err.message === 'access_denied') {
+      _gcalRetryCount = 0;
       showToast?.('Calendar access denied — check permissions');
     } else if (err.message === 'rate_limited') {
-      showToast?.('Google Calendar rate limit — retrying in 60s');
+      showToast?.(`Google Calendar rate limit — retrying in ${Math.round(retryDelay / 1000)}s`);
       clearTimeout(_gcalRetryTimer);
-      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 60_000);
+      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), retryDelay);
     } else if (!navigator.onLine) {
-      showToast?.('Offline');
-      clearTimeout(_gcalRetryTimer);
-      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 30_000);
+      showToast?.('Offline — will retry on reconnect');
     } else {
-      showToast?.('Sync error — retrying in 30s');
+      showToast?.(`Sync error — retrying in ${Math.round(retryDelay / 1000)}s`);
       clearTimeout(_gcalRetryTimer);
-      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 30_000);
+      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), retryDelay);
     }
   }
 }

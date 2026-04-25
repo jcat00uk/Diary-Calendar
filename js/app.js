@@ -28,6 +28,7 @@ import {
   gdriveState, initGoogleAuth, signIn, signOut,
   syncNow, bgSync,
   syncToGCal, fullSync, fetchCalendarList,
+  resetGCalThrottle,
 } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
@@ -91,6 +92,41 @@ const STRINGS = {
 
 const STORAGE_KEY = 'chronicle_data';
 
+// ── IndexedDB persistence ──────────────────────────────────────────────────
+
+const _IDB_NAME    = 'chronicle_db';
+const _IDB_STORE   = 'data';
+const _IDB_KEY     = 'chronicle_data';
+let   _idb         = null;
+
+async function _openIDB() {
+  if (_idb) return _idb;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(_IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(_IDB_STORE);
+    req.onsuccess  = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror    = e => reject(e.target.error);
+  });
+}
+
+async function _loadFromIDB() {
+  const db = await _openIDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(_IDB_STORE, 'readonly').objectStore(_IDB_STORE).get(_IDB_KEY);
+    req.onsuccess = e => resolve(e.target.result ?? null);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function _saveToIDB(data) {
+  const db = await _openIDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(_IDB_STORE, 'readwrite').objectStore(_IDB_STORE).put(data, _IDB_KEY);
+    req.onsuccess = () => resolve();
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
 const EVENT_THEMES = {
   birthday:    'Birthday',
   work:        'Work',
@@ -117,15 +153,26 @@ let _suppressNextCardClick = false; // set after gesture long-press to eat the t
 
 // ── Data layer ─────────────────────────────────────────────────────────────
 
-function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  let data;
-  if (raw) {
-    try { data = JSON.parse(raw); }
-    catch { data = buildDefaultData(); }
-  } else {
-    data = buildDefaultData();
+async function loadData() {
+  let data = null;
+  try {
+    data = await _loadFromIDB();
+  } catch (err) {
+    console.warn('[Chronicle] IDB load failed, checking localStorage:', err);
   }
+
+  // One-time migration from localStorage → IDB
+  if (!data) {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+        _saveToIDB(data).then(() => localStorage.removeItem(STORAGE_KEY)).catch(() => {});
+      } catch { data = null; }
+    }
+  }
+
+  if (!data) data = buildDefaultData();
   if (!data.series) data.series = [];
   ensureHolidaySettings(data);
   // Ensure theme settings exist
@@ -192,7 +239,7 @@ let _gcalSyncDebounce = null;
 
 function saveData() {
   state.data._lastModified = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+  _saveToIDB(state.data).catch(err => console.warn('[Chronicle] IDB save failed:', err));
   markDirty();
   scheduleReminders(state.data);
   bgSync(state.data, _applyRemoteData, _openConflict).catch(console.warn);
@@ -202,7 +249,7 @@ function saveData() {
     if (!gdriveState.token) return;
     try {
       await syncToGCal(state.data);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+      _saveToIDB(state.data).catch(console.warn);
     } catch (err) { console.warn('[Chronicle GCal auto-push]', err.message); }
   }, 10_000);
 }
@@ -210,7 +257,7 @@ function saveData() {
 function _applyRemoteData(data) {
   state.data = data;
   state.data.settings.gdrive.lastSync = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+  _saveToIDB(state.data).catch(console.warn);
   markClean();
   applyUITheme(state.data.settings);
   injectEventThemeCSS(state.data.settings);
@@ -330,7 +377,7 @@ function _deleteLocalEvent(data, dateKey, evt) {
 function _persistForGCal(data) {
   state.data = data;
   data._lastModified = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  _saveToIDB(data).catch(console.warn);
   markClean();
   applyUITheme(data.settings);
   injectEventThemeCSS(data.settings);
@@ -405,6 +452,123 @@ function esc(str) {
 }
 
 // ── Week grid rendering ────────────────────────────────────────────────────
+
+function _getMultidayBarColor(evt) {
+  if (evt.theme) {
+    const c = getComputedStyle(document.documentElement)
+      .getPropertyValue(`--evt-${evt.theme}-bg`).trim();
+    if (c) return c;
+  }
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--accent-blue-text').trim() || '#0C447C';
+}
+
+function renderMultidayBars() {
+  const grid = document.getElementById('weekGrid');
+  if (!grid) return;
+  grid.querySelector('.multiday-overlay')?.remove();
+
+  const weekDays = getDaysOfWeek(state.currentWeekStart);
+  const firstKey = formatDate(weekDays[0]);
+  const lastKey  = formatDate(weekDays[weekDays.length - 1]);
+
+  const multiday = [];
+  const seen = new Set();
+
+  for (const d of weekDays) {
+    const dk = formatDate(d);
+    for (const evt of (state.data.days[dk]?.events ?? [])) {
+      if (seen.has(evt.id) || evt.syncStatus === 'deleted') continue;
+      if (!evt.endDate || evt.endDate <= dk) continue;
+      seen.add(evt.id);
+      multiday.push({ evt, startKey: dk });
+    }
+  }
+  for (let i = 1; i <= 30; i++) {
+    const prev = new Date(weekDays[0]);
+    prev.setDate(prev.getDate() - i);
+    const prevKey = formatDate(prev);
+    for (const evt of (state.data.days[prevKey]?.events ?? [])) {
+      if (seen.has(evt.id) || evt.syncStatus === 'deleted') continue;
+      if (!evt.endDate || evt.endDate < firstKey) continue;
+      seen.add(evt.id);
+      multiday.push({ evt, startKey: prevKey });
+    }
+  }
+
+  if (multiday.length === 0) return;
+
+  const gridRect = grid.getBoundingClientRect();
+  const cardRects = {};
+  for (const d of weekDays) {
+    const dk = formatDate(d);
+    const el = grid.querySelector(`.day-card[data-date="${dk}"]`);
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    cardRects[dk] = {
+      left:   r.left   - gridRect.left,
+      top:    r.top    - gridRect.top,
+      right:  r.right  - gridRect.left,
+      bottom: r.bottom - gridRect.top,
+    };
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'multiday-overlay';
+  grid.appendChild(overlay);
+
+  const BAR_H       = 14;
+  const BAR_Y_START = 26;
+  const BAR_GAP     = 2;
+  const rowStacks   = new Map(); // rowKey → nextBarTop
+
+  for (const { evt, startKey } of multiday) {
+    const coveredKeys = weekDays
+      .map(d => formatDate(d))
+      .filter(dk => dk >= startKey && dk <= evt.endDate);
+    if (coveredKeys.length === 0) continue;
+
+    const rows = new Map();
+    for (const dk of coveredKeys) {
+      const r = cardRects[dk];
+      if (!r) continue;
+      const rowKey = Math.round(r.top / 4) * 4;
+      if (!rows.has(rowKey)) rows.set(rowKey, []);
+      rows.get(rowKey).push(dk);
+    }
+
+    for (const [rowKey, keys] of rows) {
+      keys.sort((a, b) => (cardRects[a]?.left ?? 0) - (cardRects[b]?.left ?? 0));
+      const firstR = cardRects[keys[0]];
+      const lastR  = cardRects[keys[keys.length - 1]];
+      if (!firstR || !lastR) continue;
+
+      if (!rowStacks.has(rowKey)) rowStacks.set(rowKey, firstR.top + BAR_Y_START);
+      const barTop = rowStacks.get(rowKey);
+      rowStacks.set(rowKey, barTop + BAR_H + BAR_GAP);
+
+      const barStartsThisWeek = keys[0] === startKey;
+      const barEndsThisWeek   = evt.endDate <= lastKey;
+      const r1 = barStartsThisWeek ? '6px' : '0';
+      const r2 = barEndsThisWeek   ? '6px' : '0';
+
+      const bar = document.createElement('div');
+      bar.className = 'multiday-bar';
+      bar.style.cssText = `top:${barTop}px;left:${firstR.left + 4}px;` +
+        `width:${lastR.right - firstR.left - 8}px;height:${BAR_H}px;` +
+        `background:${_getMultidayBarColor(evt)};` +
+        `border-radius:${r1} ${r2} ${r2} ${r1};`;
+      if (barStartsThisWeek) {
+        bar.innerHTML = `<span class="multiday-bar-label">${esc(evt.title)}</span>`;
+      }
+      bar.addEventListener('click', e => {
+        e.stopPropagation();
+        openAddEventModal(startKey, evt);
+      });
+      overlay.appendChild(bar);
+    }
+  }
+}
 
 function renderWeekGrid() {
   const grid = document.getElementById('weekGrid');
@@ -481,11 +645,13 @@ function renderWeekGrid() {
   }
 
   updateRibbonLabels();
+  requestAnimationFrame(renderMultidayBars);
 }
 
 /** Build the inner HTML for a single day card */
 function buildCardHTML(date, dateKey) {
-  const events  = getEventsForDate(state.data, dateKey).filter(e => e.syncStatus !== 'deleted');
+  const events  = getEventsForDate(state.data, dateKey, { includeContinuations: false })
+    .filter(e => e.syncStatus !== 'deleted' && !(e.endDate && e.endDate > dateKey));
   const roEvts  = _getReadOnlyEventsForDate(dateKey);
   const allEvts = events.concat(roEvts);
   const shown   = allEvts.slice(0, 3);
@@ -541,7 +707,8 @@ function refreshCardEvents(dateKey) {
   const strip = card.querySelector('.events-strip');
   if (!strip) return;
 
-  const events  = getEventsForDate(state.data, dateKey).filter(e => e.syncStatus !== 'deleted');
+  const events  = getEventsForDate(state.data, dateKey, { includeContinuations: false })
+    .filter(e => e.syncStatus !== 'deleted' && !(e.endDate && e.endDate > dateKey));
   const roEvts  = _getReadOnlyEventsForDate(dateKey);
   const allEvts = events.concat(roEvts);
   const shown   = allEvts.slice(0, 3);
@@ -579,6 +746,7 @@ function refreshCardEvents(dateKey) {
 /** Refresh all 7 day-card event strips currently rendered on screen */
 function refreshVisibleWeekCards() {
   getDaysOfWeek(state.currentWeekStart).forEach(d => refreshCardEvents(formatDate(d)));
+  requestAnimationFrame(renderMultidayBars);
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
@@ -916,13 +1084,23 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
       </div>
 
       <div class="field-group">
-        <label class="field-label" for="evtDate">Date</label>
+        <label class="field-label" for="evtDate">Start date</label>
         <input class="field-input" id="evtDate" type="date" value="${esc(dateKey)}">
       </div>
 
       <div class="field-group">
-        <label class="field-label" for="evtTime">Time (optional)</label>
-        <input class="field-input" id="evtTime" type="time" value="${esc(time)}">
+        <label class="field-label" for="evtEndDate">End date <span style="color:var(--text-tertiary);font-weight:400">(optional)</span></label>
+        <input class="field-input" id="evtEndDate" type="date" value="${esc(existing?.endDate ?? '')}">
+      </div>
+
+      <div class="field-group">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <label class="field-label" for="evtTime" style="margin-bottom:0">Time</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="evtAllDay" ${!time ? 'checked' : ''}> All day
+          </label>
+        </div>
+        <input class="field-input" id="evtTime" type="time" value="${esc(time)}" style="${!time ? 'display:none' : ''}">
       </div>
 
       <div class="field-group" id="reminderGroup">
@@ -1021,6 +1199,14 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
   }
   titleEl.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); }
+  });
+
+  // ── All day checkbox ─────────────────────────────────────────────────────
+  const allDayCheckbox = sheet.querySelector('#evtAllDay');
+  const timeInput      = sheet.querySelector('#evtTime');
+  allDayCheckbox.addEventListener('change', () => {
+    timeInput.style.display = allDayCheckbox.checked ? 'none' : '';
+    if (allDayCheckbox.checked) timeInput.value = '';
   });
 
   // ── Theme pill selector ──────────────────────────────────────────────────
@@ -1179,10 +1365,13 @@ function openAddEventModal(dateKey, existing = null, editMode = 'normal') {
     const titleVal = titleEl.innerHTML.trim();
     if (!titleEl.textContent.trim()) { titleEl.focus(); return; }
 
-    const dateVal = sheet.querySelector('#evtDate').value || dateKey;
-    const timeVal = sheet.querySelector('#evtTime').value;
-    const notesVal = sheet.querySelector('#evtNotes').value;
-    const themeVal = sheet.querySelector('#evtTheme').value || null;
+    const dateVal    = sheet.querySelector('#evtDate').value || dateKey;
+    const endDateRaw = sheet.querySelector('#evtEndDate').value;
+    const allDayVal  = sheet.querySelector('#evtAllDay').checked;
+    const timeVal    = allDayVal ? null : (sheet.querySelector('#evtTime').value || null);
+    const endDateVal = endDateRaw && endDateRaw > dateVal ? endDateRaw : null;
+    const notesVal   = sheet.querySelector('#evtNotes').value;
+    const themeVal   = sheet.querySelector('#evtTheme').value || null;
     const reminderRaw = sheet.querySelector('#evtReminder').value;
     const reminderVal = reminderRaw === ''       ? null
                       : reminderRaw === 'custom' ? ((Number(sheet.querySelector('#evtReminderCustom').value) || 0) * 1440 || null)
@@ -1245,7 +1434,8 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
       updateEvent(state.data, dateKey, existing.id, {
         title: titleVal,
         type: selectedType,
-        time: timeVal || null,
+        time: timeVal,
+        endDate: endDateVal,
         notes: notesVal,
         reminderMinutes: reminderVal,
         theme: themeVal,
@@ -1255,7 +1445,8 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
       addEvent(state.data, dateVal, {
         title: titleVal,
         type: selectedType,
-        time: timeVal || null,
+        time: timeVal,
+        endDate: endDateVal,
         notes: notesVal,
         reminderMinutes: reminderVal,
         theme: themeVal,
@@ -1595,7 +1786,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-appearance">
+    <div class="settings-group" id="sg-appearance">
       <div class="settings-group-header" data-toggle="sg-appearance">
         <span class="settings-group-label">Appearance</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1617,7 +1808,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-calendar">
+    <div class="settings-group" id="sg-calendar">
       <div class="settings-group-header" data-toggle="sg-calendar">
         <span class="settings-group-label">Calendar</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1683,7 +1874,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-data">
+    <div class="settings-group" id="sg-data">
       <div class="settings-group-header" data-toggle="sg-data">
         <span class="settings-group-label">Data</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1697,7 +1888,7 @@ function openSettingsDropdown() {
         </div>
       </div>
     </div>
-    <div class="settings-group open" id="sg-sync">
+    <div class="settings-group" id="sg-sync">
       <div class="settings-group-header" data-toggle="sg-sync">
         <span class="settings-group-label">Sync</span>
         <svg class="icon settings-chevron"><use href="assets/icons.svg#icon-chevron-right"/></svg>
@@ -1922,13 +2113,32 @@ function handleSettingsAction(action) {
         reader.onload = ev => {
           try {
             const imported = JSON.parse(ev.target.result);
-            if (!imported.days || !imported.settings) throw new Error();
+            // Structural validation
+            if (!imported || typeof imported !== 'object') throw new Error('not an object');
+            if (!imported.days || typeof imported.days !== 'object' || Array.isArray(imported.days)) throw new Error('missing days');
+            if (!imported.settings || typeof imported.settings !== 'object') throw new Error('missing settings');
+            if (!Array.isArray(imported.series ?? [])) throw new Error('series must be array');
+            // Validate day keys are YYYY-MM-DD and events are arrays
+            for (const [k, v] of Object.entries(imported.days)) {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) throw new Error(`invalid day key: ${k}`);
+              if (!v || typeof v !== 'object') throw new Error(`invalid day entry: ${k}`);
+              if (v.events !== undefined && !Array.isArray(v.events)) throw new Error(`events not array: ${k}`);
+              // Sanitize diary HTML to strip XSS
+              if (typeof v.diary === 'string') v.diary = sanitizeDiaryHTML(v.diary);
+            }
             const replace = confirm('Replace all existing data? Press Cancel to merge instead.');
-            if (replace) { state.data = imported; }
-            else { Object.assign(state.data.days, imported.days); }
+            if (replace) {
+              state.data = { ...state.data, ...imported, settings: { ...state.data.settings, ...imported.settings } };
+            } else {
+              Object.assign(state.data.days, imported.days);
+              if (Array.isArray(imported.series)) {
+                const existingIds = new Set((state.data.series || []).map(s => s.id));
+                imported.series.filter(s => s.id && !existingIds.has(s.id)).forEach(s => state.data.series.push(s));
+              }
+            }
             saveData(); renderWeekGrid();
             showToast(STRINGS.importDone);
-          } catch { showToast(STRINGS.invalidImport); }
+          } catch (err) { showToast(STRINGS.invalidImport); }
           input.remove();
         };
         reader.readAsText(file);
@@ -2154,7 +2364,12 @@ function renderAgendaList(filter) {
   });
 
   if (items.length === 0) {
-    list.innerHTML = `<div class="agenda-empty">No ${filter === 'all' ? '' : filter + ' '}entries yet.</div>`;
+    const label = filter === 'all' ? 'events or todos' : filter + 's';
+    list.innerHTML = `<div class="agenda-empty">
+      <div class="agenda-empty__icon">📅</div>
+      <div class="agenda-empty__title">Nothing here yet</div>
+      <div class="agenda-empty__sub">Add ${label} from the calendar to see them here.</div>
+    </div>`;
     return;
   }
 
@@ -2457,6 +2672,53 @@ function stripHTML(html) {
   return tmp.textContent || '';
 }
 
+function sanitizeDiaryHTML(html) {
+  if (!html || typeof html !== 'string') return '';
+  const ALLOWED_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','P','DIV',
+    'SPAN','A','H1','H2','H3','UL','OL','LI','MARK']);
+  const ALLOWED_ATTRS = { A: ['href','target'], SPAN: ['style'], 'default': [] };
+  const SAFE_STYLE_PROPS = new Set(['color','background-color','font-size','font-weight',
+    'font-style','text-decoration']);
+
+  function clean(node) {
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+      const child = node.childNodes[i];
+      if (child.nodeType === Node.TEXT_NODE) continue;
+      if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); continue; }
+      const tag = child.tagName;
+      if (!ALLOWED_TAGS.has(tag)) {
+        while (child.firstChild) node.insertBefore(child.firstChild, child);
+        child.remove();
+        continue;
+      }
+      const allowed = ALLOWED_ATTRS[tag] || ALLOWED_ATTRS['default'];
+      Array.from(child.attributes).forEach(attr => {
+        if (!allowed.includes(attr.name)) { child.removeAttribute(attr.name); return; }
+        if (attr.name === 'href') {
+          const v = attr.value.trim().toLowerCase();
+          if (!v.startsWith('http://') && !v.startsWith('https://') && !v.startsWith('mailto:')) {
+            child.removeAttribute('href');
+          }
+        }
+        if (attr.name === 'style') {
+          const cleaned = attr.value.split(';').filter(decl => {
+            const prop = decl.split(':')[0]?.trim().toLowerCase();
+            return prop && SAFE_STYLE_PROPS.has(prop);
+          }).join(';');
+          cleaned ? child.setAttribute('style', cleaned) : child.removeAttribute('style');
+        }
+      });
+      if (tag === 'A') child.setAttribute('target', '_blank');
+      clean(child);
+    }
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  clean(container);
+  return container.innerHTML;
+}
+
 function makeSnippet(text, qLower) {
   const lower = text.toLowerCase();
   const idx = lower.indexOf(qLower);
@@ -2586,9 +2848,9 @@ function scheduleNextDayRefresh() {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
-function init() {
+async function init() {
   history.replaceState({ chronicle: 'main' }, '');
-  state.data  = loadData();
+  state.data  = await loadData();
   state.today = new Date(); state.today.setHours(0, 0, 0, 0);
   state.currentWeekStart = getWeekStart(state.today, state.data.settings.weekStart);
 
@@ -2610,7 +2872,7 @@ function init() {
       syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn);
     } else if (status === 'synced') {
       state.data.settings.gdrive.lastSync = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+      _saveToIDB(state.data).catch(console.warn);
     } else if (status === 'signed') {
       // Token refreshed — trigger full GCal sync if we have a token now
       _runFullSync();
@@ -2632,6 +2894,10 @@ function init() {
 
   renderWeekGrid();
 
+  // Redraw multi-day bars when grid resizes (orientation change, window resize)
+  new ResizeObserver(() => requestAnimationFrame(renderMultidayBars))
+    .observe(document.getElementById('weekGrid'));
+
   // ── Ribbon buttons ──
   document.getElementById('btnToday').addEventListener('click', goToToday);
   document.getElementById('btnJumpDate').addEventListener('click', openDatePicker);
@@ -2650,7 +2916,7 @@ function init() {
   document.getElementById('btnSettings').addEventListener('click', openSettingsDropdown);
 
   // Sync when coming back online
-  window.addEventListener('online', () => _runFullSync());
+  window.addEventListener('online', () => { resetGCalThrottle(); _runFullSync(); });
 
   // ── Edge nav arrows (Left/Right = week, Up/Down = first of month) ──
   document.getElementById('navPrevWeek').addEventListener('click', prevMonthFirst);

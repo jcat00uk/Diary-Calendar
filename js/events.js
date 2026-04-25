@@ -39,6 +39,7 @@ export function addEvent(data, dateKey, eventData) {
     type: eventData.type || 'event',
     title: eventData.title,
     time: eventData.time || null,
+    endDate: eventData.endDate || null,
     done: false,
     repeat: eventData.repeat || null,
     notes: eventData.notes || '',
@@ -324,7 +325,7 @@ export function generateOccurrencesForSeries(series, dateKey) {
   return result;
 }
 
-export function getEventsForDate(data, dateKey) {
+export function getEventsForDate(data, dateKey, { includeContinuations = true } = {}) {
   const normal = getEvents(data, dateKey) || [];
 
   const repeats = data.series
@@ -332,6 +333,23 @@ export function getEventsForDate(data, dateKey) {
     .filter(x => x !== null);
 
   const all = [...normal, ...repeats];
+
+  // Scan back up to 30 days for multi-day events covering this date
+  if (includeContinuations) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const target = new Date(y, m - 1, d);
+    for (let i = 1; i <= 30; i++) {
+      const prev = new Date(target);
+      prev.setDate(prev.getDate() - i);
+      const prevKey = formatDateObj(prev);
+      for (const evt of (data.days[prevKey]?.events || [])) {
+        if (evt.syncStatus === 'deleted') continue;
+        if (evt.endDate && evt.endDate >= dateKey) {
+          all.push({ ...evt, isMultidayContinuation: true });
+        }
+      }
+    }
+  }
 
   all.sort((a, b) => {
     if (!a.time && !b.time) return 0;
