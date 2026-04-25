@@ -469,7 +469,8 @@ export async function pullReadOnlyCalendars(data) {
   if (!gdriveState.token) return;
   if (!data.readOnlyEvents) data.readOnlyEvents = {};
 
-  const calendars = (data.settings.googleCalendars || []).filter(c => c.enabled && c.readOnly);
+  const chronicleId = data.settings.chronicleCalendarId;
+  const calendars = (data.settings.googleCalendars || []).filter(c => c.enabled && c.id !== chronicleId);
   if (!calendars.length) return;
 
   const now     = new Date();
