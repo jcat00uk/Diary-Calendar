@@ -355,11 +355,10 @@ function buildGCalEvent(evt, dateKey, tz) {
     extendedProperties: { private: { chronicleId: evt.id } },
   };
 
-  if (evt.notes)                    gcalEvt.description = evt.notes;
-  if (evt.reminderMinutes != null)  gcalEvt.reminders   = {
-    useDefault: false,
-    overrides: [{ method: 'popup', minutes: evt.reminderMinutes }],
-  };
+  if (evt.notes) gcalEvt.description = evt.notes;
+  gcalEvt.reminders = evt.reminderMinutes != null
+    ? { useDefault: false, overrides: [{ method: 'popup', minutes: evt.reminderMinutes }] }
+    : { useDefault: false, overrides: [] };
 
   return gcalEvt;
 }
@@ -389,6 +388,19 @@ function gcalEventDateKey(gcalEvt) {
 
 // ── GCal sync functions ───────────────────────────────────────────────────────
 
+async function _fetchAllPages(baseUrl) {
+  const items = [];
+  let pageToken = null;
+  do {
+    const url    = pageToken ? `${baseUrl}&pageToken=${encodeURIComponent(pageToken)}` : baseUrl;
+    const resp   = await gcalRequest(url);
+    const result = await resp.json();
+    if (result.items) items.push(...result.items);
+    pageToken = result.nextPageToken || null;
+  } while (pageToken);
+  return items;
+}
+
 export async function syncToGCal(data) {
   if (!gdriveState.token) return;
 
@@ -406,33 +418,48 @@ export async function syncToGCal(data) {
       if (status === 'pending') {
         const gcalEvt = buildGCalEvent(evt, dateKey, tz);
         if (!evt.googleEventId) {
-          const resp = await gcalRequest(
-            `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
-          );
-          const created     = await resp.json();
-          evt.googleEventId    = created.id;
-          evt.googleCalendarId = chronicleCalId;
-          evt.syncStatus       = 'synced';
-          evt.lastSyncedAt     = new Date().toISOString();
+          try {
+            const resp       = await gcalRequest(
+              `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+            );
+            const created        = await resp.json();
+            evt.googleEventId    = created.id;
+            evt.googleCalendarId = chronicleCalId;
+            evt.syncStatus       = 'synced';
+            evt.lastSyncedAt     = new Date().toISOString();
+          } catch (err) {
+            console.warn('[Chronicle GCal] insert failed:', evt.id, err.message);
+          }
         } else {
           const calId = evt.googleCalendarId || chronicleCalId;
-          const resp = await gcalRequest(
-            `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
-            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
-          );
-          if (resp.ok) {
-            evt.syncStatus   = 'synced';
-            evt.lastSyncedAt = new Date().toISOString();
+          try {
+            const resp = await gcalRequest(
+              `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
+              { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+            );
+            if (resp.ok) {
+              evt.syncStatus   = 'synced';
+              evt.lastSyncedAt = new Date().toISOString();
+            } else if (resp.status === 404 || resp.status === 410) {
+              evt.googleEventId = null;
+              evt.syncStatus    = 'pending';
+            }
+          } catch (err) {
+            console.warn('[Chronicle GCal] patch failed:', evt.id, err.message);
           }
         }
       } else if (status === 'deleted') {
         if (evt.googleEventId) {
           const calId = evt.googleCalendarId || chronicleCalId;
-          await gcalRequest(
-            `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
-            { method: 'DELETE' }
-          );
+          try {
+            await gcalRequest(
+              `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
+              { method: 'DELETE' }
+            );
+          } catch (err) {
+            console.warn('[Chronicle GCal] delete failed:', evt.id, err.message);
+          }
         }
         toRemove.push(evt.id);
       }
@@ -445,40 +472,57 @@ export async function syncToGCal(data) {
 
   // ── Diary entries as all-day GCal events ──────────────────────────────────
   for (const [dateKey, day] of Object.entries(data.days || {})) {
-    const diaryText  = day.diary ? stripDiaryHTML(day.diary) : '';
-    const modified   = day.diaryModified  || 0;
-    const syncedAt   = day.diarySyncedAt  || 0;
+    const diaryText = day.diary ? stripDiaryHTML(day.diary) : '';
+    const modified  = day.diaryModified || 0;
+    const syncedAt  = day.diarySyncedAt || 0;
 
     if (!diaryText && !day.diaryGCalId) continue;
 
     if (!diaryText && day.diaryGCalId) {
-      await gcalRequest(
-        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
-        { method: 'DELETE' }
-      );
+      try {
+        await gcalRequest(
+          `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
+          { method: 'DELETE' }
+        );
+      } catch (err) {
+        console.warn('[Chronicle GCal] diary delete failed:', dateKey, err.message);
+      }
       day.diaryGCalId   = null;
       day.diarySyncedAt = null;
       continue;
     }
 
-    if (day.diaryGCalId && modified <= syncedAt) continue; // already up to date
+    if (day.diaryGCalId && modified <= syncedAt) continue;
 
     const gcalEvt = buildDiaryGCalEvent(diaryText, dateKey);
 
     if (!day.diaryGCalId) {
-      const resp    = await gcalRequest(
-        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
-      );
-      const created     = await resp.json();
-      day.diaryGCalId   = created.id;
-      day.diarySyncedAt = Date.now();
+      try {
+        const resp        = await gcalRequest(
+          `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+        );
+        const created     = await resp.json();
+        day.diaryGCalId   = created.id;
+        day.diarySyncedAt = Date.now();
+      } catch (err) {
+        console.warn('[Chronicle GCal] diary insert failed:', dateKey, err.message);
+      }
     } else {
-      const resp = await gcalRequest(
-        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
-        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
-      );
-      if (resp.ok) day.diarySyncedAt = Date.now();
+      try {
+        const resp = await gcalRequest(
+          `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(day.diaryGCalId)}`,
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+        );
+        if (resp.ok) {
+          day.diarySyncedAt = Date.now();
+        } else if (resp.status === 404 || resp.status === 410) {
+          day.diaryGCalId   = null;
+          day.diarySyncedAt = null;
+        }
+      } catch (err) {
+        console.warn('[Chronicle GCal] diary patch failed:', dateKey, err.message);
+      }
     }
   }
 }
@@ -487,16 +531,15 @@ export async function syncFromGCal(data) {
   if (!gdriveState.token) return;
 
   const chronicleCalId = await ensureChronicleCalendar(data);
-  const now = new Date();
+  const now     = new Date();
   const timeMin = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString();
   const timeMax = new Date(now.getFullYear(), now.getMonth() + 12, now.getDate()).toISOString();
 
-  const url = `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events` +
+  const baseUrl = `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events` +
     `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
-    `&singleEvents=true&orderBy=startTime&maxResults=2500`;
+    `&singleEvents=true&orderBy=startTime&maxResults=2500&showDeleted=true`;
 
-  const resp   = await gcalRequest(url);
-  const result = await resp.json();
+  const items = await _fetchAllPages(baseUrl);
 
   // Build lookup: googleEventId → { dateKey, evt }
   const localByGCalId = {};
@@ -506,9 +549,16 @@ export async function syncFromGCal(data) {
     }
   }
 
-  for (const gcalEvt of (result.items || [])) {
-    if (gcalEvt.status === 'cancelled') continue;
+  for (const gcalEvt of items) {
     if (gcalEvt.extendedProperties?.private?.chronicleDiary === 'true') continue;
+
+    if (gcalEvt.status === 'cancelled') {
+      const local = localByGCalId[gcalEvt.id];
+      if (local && local.evt.syncStatus !== 'deleted') {
+        local.evt.syncStatus = 'deleted';
+      }
+      continue;
+    }
 
     const local = localByGCalId[gcalEvt.id];
     if (local) {
@@ -549,12 +599,10 @@ export async function pullReadOnlyCalendars(data) {
 
   for (const cal of calendars) {
     try {
-      const url = `${GCAL_BASE}/calendars/${encodeURIComponent(cal.id)}/events` +
+      const baseUrl = `${GCAL_BASE}/calendars/${encodeURIComponent(cal.id)}/events` +
         `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
         `&singleEvents=true&orderBy=startTime&maxResults=2500`;
-      const resp   = await gcalRequest(url);
-      const result = await resp.json();
-      data.readOnlyEvents[cal.id] = result.items || [];
+      data.readOnlyEvents[cal.id] = await _fetchAllPages(baseUrl);
     } catch (err) {
       console.warn('[Chronicle GCal] read-only pull failed:', cal.id, err.message);
     }

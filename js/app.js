@@ -251,17 +251,20 @@ function _renderGCalCalendarList(container, cals) {
   const chronicleId = state.data.settings.chronicleCalendarId;
 
   container.innerHTML = cals.map(cal => {
-    const prev     = savedMap[cal.id] || {};
-    const enabled  = prev.enabled ?? (cal.id === chronicleId);
-    const readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
-    const colour   = cal.backgroundColor || prev.colour || '#4285f4';
+    const prev        = savedMap[cal.id] || {};
+    const enabled     = prev.enabled ?? (cal.id === chronicleId);
+    const isChronicle = cal.id === chronicleId;
+    const isReadOnly  = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+    const isViewOnly  = !isReadOnly && !isChronicle;
+    const colour      = cal.backgroundColor || prev.colour || '#4285f4';
     return `
-      <div class="settings-row gcal-cal-row" data-cal-id="${esc(cal.id)}" data-cal-readonly="${readOnly}"
+      <div class="settings-row gcal-cal-row" data-cal-id="${esc(cal.id)}" data-cal-readonly="${isReadOnly}"
            data-cal-colour="${esc(colour)}" data-cal-name="${esc(cal.summary || '')}">
         <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
           <span class="gcal-cal-dot" style="background:${esc(colour)}"></span>
           <span class="settings-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cal.summary || '(no name)')}</span>
-          ${readOnly ? '<span class="gcal-readonly-badge">read-only</span>' : ''}
+          ${isReadOnly ? '<span class="gcal-readonly-badge">read-only</span>' : ''}
+          ${isViewOnly ? '<span class="gcal-readonly-badge">view only</span>' : ''}
         </div>
         <div class="toggle-pill" style="flex-shrink:0">
           <div class="toggle-pill-btn ${enabled ? 'active' : ''}" data-cal-toggle="on">On</div>

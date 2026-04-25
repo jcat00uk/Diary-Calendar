@@ -22,7 +22,7 @@ touch-first interactions, CSS variables everywhere.
 
 
 Remaining Phase 2:
-
+P2-GD Google Drive Backup
 P2-7 Google Calendar Sync
 
 Coding behaviour:
@@ -507,112 +507,4 @@ Line numbers (if snippet provided)
 
 2–5 lines of context
 
-
-
-Chronicle — P2-7 GCal Sync bugfixes
-
-## What's already built (this session)
-
-Google Calendar sync is implemented across js/sync.js, js/events.js, js/app.js,
-css/ribbon.css, and css/modals.css. Key behaviours:
-
-- OAuth via Google Identity Services (GIS) with combined scope:
-  'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata email'
-- Token stored in memory only (gdriveState.token). Scope change detection via
-  localStorage key 'chronicle_consentedScope' prevents silent refresh popup on
-  scope upgrade.
-- syncToGCal(data) — pushes events (type='event') with syncStatus='pending' to a
-  'Chronicle' GCal calendar. Skips todos. Also pushes diary entries as all-day
-  events (📓 prefix, extendedProperties.private.chronicleDiary='true').
-- syncFromGCal(data) — pulls Chronicle calendar events back. Skips diary events.
-  Last-write-wins on conflict.
-- pullReadOnlyCalendars(data) — fetches ALL enabled non-Chronicle calendars
-  (regardless of ownership) and stores in data.readOnlyEvents[calId].
-- fullSync(data, persist, showToast, onStart, onEnd) — orchestrates all three,
-  30s throttle, retry on error.
-- Debounced push-only sync 10s after any saveData() call.
-- Events marked syncStatus='deleted' instead of removed immediately when they
-  have a googleEventId; syncToGCal then deletes from GCal and removes locally.
-- Settings dropdown has a Google Calendar section: sign in/out, Sync Now,
-  calendar selector with per-calendar On/Off toggles.
-- Ribbon sync button shows spinning animation (icon-btn--syncing class) during sync.
-- window.addEventListener('online') triggers fullSync on reconnect.
-
-## Known issues to fix — in priority order
-
-### 1. Per-event error isolation (highest priority — silent data loss)
-Currently syncToGCal and the diary sync loop have no per-item try/catch. One
-failed API call (e.g. 404 on patch because event was deleted in GCal, or 410
-Gone) throws and aborts the rest of the sync. All subsequent events/diaries are
-skipped silently.
-Fix: wrap each insert/patch/delete in its own try/catch. Log the error and
-continue. If it's a 404/410 on patch, clear the googleEventId and set
-syncStatus='pending' so it re-inserts on next sync.
-
-### 2. GCal deletions not detected
-syncFromGCal only processes returned events. If the user deletes an event in
-Google Calendar, it's absent from the response — Chronicle never knows, and the
-next syncToGCal pushes it back as a new event (status='pending' or re-inserts).
-Fix: add showDeleted=true to the events.list query. For returned items where
-status==='cancelled', find the matching local event by googleEventId and mark
-it syncStatus='deleted' (it will be removed locally on next syncToGCal, and
-won't be re-pushed since deletion was triggered from GCal side). Also handle
-410 Gone response on patch the same way.
-
-### 3. Pagination missing
-events.list returns max 2500 results per page. If the date range contains more,
-the response includes a nextPageToken and remaining events are silently dropped.
-Fix: after each events.list call, check result.nextPageToken. If present, fetch
-the next page with pageToken=... appended and concatenate items. Loop until no
-nextPageToken. Apply to syncFromGCal and pullReadOnlyCalendars.
-
-### 4. Recurring series not synced to GCal
-data.series[] contains Chronicle's repeating events. These are never pushed to
-GCal — they only appear in Chronicle as generated occurrences. GCal supports
-recurring events natively via RRULE in the event body.
-Fix: for each series in data.series[], build a GCal event with a recurrence
-field derived from the Chronicle repeat rule. Store the GCal series event ID
-in the series object (series.googleEventId). On edit/delete, use
-events.patch/delete on the series event. This is the most complex fix — tackle
-last.
-
-### 5. Clearing a reminder doesn't clear it in GCal
-When patching an event that previously had a reminder but now has
-reminderMinutes=null, we omit the reminders field from the PATCH body. GCal
-treats omitted fields as "no change" — the old reminder stays.
-Fix: when reminderMinutes is null, explicitly include
-reminders: { useDefault: false, overrides: [] } in the patch body.
-
-### 6. Owned-calendar read-only badge missing in settings UI
-In _renderGCalCalendarList (app.js), the 'read-only' badge only shows for
-calendars where accessRole==='reader'|'freeBusyReader'. Owned calendars
-(accessRole='owner'/'writer') that aren't Chronicle get no badge, even though
-Chronicle only shows their events as non-editable overlays. This confuses users
-who expect two-way sync.
-Fix: show a 'view only in Chronicle' badge (or similar label) for enabled owned
-calendars that aren't the Chronicle calendar, to set expectations correctly.
-
-## Data model reminder
-
-Each event in data.days[dateKey].events[] has:
-  googleEventId, googleCalendarId, syncStatus ('pending'|'synced'|'deleted'),
-  lastSyncedAt
-
-Each day in data.days[dateKey] has:
-  diaryGCalId, diaryModified, diarySyncedAt
-
-Settings: googleCalendars[], chronicleCalendarId, lastFullSync, googleAuth,
-readOnlyEvents (root-level on data, not in settings)
-
-## Key functions and locations
-
-- js/sync.js: syncToGCal, syncFromGCal, pullReadOnlyCalendars, fullSync,
-  fetchCalendarList, ensureChronicleCalendar, gcalRequest, buildGCalEvent,
-  parseGCalEvent, buildDiaryGCalEvent, stripDiaryHTML
-- js/app.js: _runFullSync, _persistForGCal, _onGCalSyncStart, _onGCalSyncEnd,
-  _renderGCalCalendarList, _getReadOnlyEventsForDate, _deleteLocalEvent,
-  openSettingsDropdown (GCal section at bottom of sg-sync group)
-- OAuth client ID is hardcoded in sync.js as CLIENT_ID — do not expose in UI
-- All GCal API calls use fetch() directly against
-  https://www.googleapis.com/calendar/v3/ — no gapi.client library
 
