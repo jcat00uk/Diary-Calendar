@@ -295,7 +295,8 @@ function _renderGCalCalendarList(container, cals) {
 
 function _getReadOnlyEventsForDate(dateKey) {
   const result = [];
-  const calendars = (state.data.settings?.googleCalendars || []).filter(c => c.enabled && c.readOnly);
+  const chronicleId = state.data.settings?.chronicleCalendarId;
+  const calendars = (state.data.settings?.googleCalendars || []).filter(c => c.enabled && c.id !== chronicleId);
   for (const cal of calendars) {
     for (const gcalEvt of (state.data.readOnlyEvents?.[cal.id] || [])) {
       if (gcalEvt.status === 'cancelled') continue;
