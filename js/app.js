@@ -27,6 +27,7 @@ import {
   registerDirtyCallback, registerStatusCallback,
   gdriveState, initGoogleAuth, signIn, signOut,
   syncNow, bgSync,
+  syncToGCal, fullSync, fetchCalendarList,
 } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
@@ -133,10 +134,20 @@ function loadData() {
   if (!data.settings.customUIThemes)      data.settings.customUIThemes = [];
   if (!data.settings.eventThemeOverrides) data.settings.eventThemeOverrides = {};
   if (!data.settings.customEventThemes)   data.settings.customEventThemes = [];
-  // Migrate legacy 'reminder' type entries to 'event'
+  // Ensure GCal settings exist
+  if (!data.settings.googleAuth)          data.settings.googleAuth = { enabled: false, clientId: '', connectedEmail: '' };
+  if (!data.settings.googleCalendars)     data.settings.googleCalendars = [];
+  if (!('lastFullSync'        in data.settings)) data.settings.lastFullSync = null;
+  if (!('chronicleCalendarId' in data.settings)) data.settings.chronicleCalendarId = null;
+  if (!data.readOnlyEvents)               data.readOnlyEvents = {};
+  // Migrate legacy 'reminder' type entries to 'event'; ensure GCal fields on events
   for (const day of Object.values(data.days || {})) {
     for (const evt of (day.events || [])) {
       if (evt.type === 'reminder') evt.type = 'event';
+      if (!('googleEventId'    in evt)) evt.googleEventId    = null;
+      if (!('googleCalendarId' in evt)) evt.googleCalendarId = null;
+      if (!('syncStatus'       in evt)) evt.syncStatus       = 'pending';
+      if (!('lastSyncedAt'     in evt)) evt.lastSyncedAt     = null;
     }
   }
   for (const s of data.series) {
@@ -161,16 +172,23 @@ function buildDefaultData() {
       agendaBeforeDays:    14,
       agendaAheadDays:     60,
       gdrive:              { enabled: false, lastSync: null },
+      googleAuth:          { enabled: false, clientId: '', connectedEmail: '' },
+      googleCalendars:     [],
+      lastFullSync:        null,
+      chronicleCalendarId: null,
       uiTheme:             'default',
       uiThemeCustomVars:   { light: {}, dark: {} },
       customUIThemes:      [],
       eventThemeOverrides: {},
       customEventThemes:   [],
     },
-    days:   {},
-    series: [],
+    days:           {},
+    series:         [],
+    readOnlyEvents: {},
   };
 }
+
+let _gcalSyncDebounce = null;
 
 function saveData() {
   state.data._lastModified = new Date().toISOString();
@@ -178,6 +196,15 @@ function saveData() {
   markDirty();
   scheduleReminders(state.data);
   bgSync(state.data, _applyRemoteData, _openConflict).catch(console.warn);
+  // Debounced push-only GCal sync (no pull) after saves
+  clearTimeout(_gcalSyncDebounce);
+  _gcalSyncDebounce = setTimeout(async () => {
+    if (!gdriveState.token) return;
+    try {
+      await syncToGCal(state.data);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+    } catch (err) { console.warn('[Chronicle GCal auto-push]', err.message); }
+  }, 10_000);
 }
 
 function _applyRemoteData(data) {
@@ -189,6 +216,122 @@ function _applyRemoteData(data) {
   injectEventThemeCSS(state.data.settings);
   renderWeekGrid();
   scheduleReminders(state.data);
+}
+
+function _runFullSync() {
+  fullSync(state.data, _persistForGCal, showToast, _onGCalSyncStart, _onGCalSyncEnd)
+    .catch(console.warn);
+}
+
+function _onGCalSyncStart() {
+  document.getElementById('btnSync')?.classList.add('icon-btn--syncing');
+}
+
+function _onGCalSyncEnd(result) {
+  document.getElementById('btnSync')?.classList.remove('icon-btn--syncing');
+  const badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  if (result === 'error') {
+    badge.style.background = 'var(--accent-red, #c0392b)';
+    badge.hidden = false;
+  } else {
+    badge.style.background = '';
+    badge.hidden = true;
+  }
+}
+
+function _renderGCalCalendarList(container, cals) {
+  if (!cals.length) {
+    container.innerHTML = '<div style="padding:8px 14px;font-size:12px;color:var(--text-tertiary)">No calendars found</div>';
+    return;
+  }
+
+  const saved     = state.data.settings.googleCalendars || [];
+  const savedMap  = Object.fromEntries(saved.map(c => [c.id, c]));
+  const chronicleId = state.data.settings.chronicleCalendarId;
+
+  container.innerHTML = cals.map(cal => {
+    const prev     = savedMap[cal.id] || {};
+    const enabled  = prev.enabled ?? (cal.id === chronicleId);
+    const readOnly = cal.accessRole === 'reader' || cal.accessRole === 'freeBusyReader';
+    const colour   = cal.backgroundColor || prev.colour || '#4285f4';
+    return `
+      <div class="settings-row gcal-cal-row" data-cal-id="${esc(cal.id)}" data-cal-readonly="${readOnly}"
+           data-cal-colour="${esc(colour)}" data-cal-name="${esc(cal.summary || '')}">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
+          <span class="gcal-cal-dot" style="background:${esc(colour)}"></span>
+          <span class="settings-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cal.summary || '(no name)')}</span>
+          ${readOnly ? '<span class="gcal-readonly-badge">read-only</span>' : ''}
+        </div>
+        <div class="toggle-pill" style="flex-shrink:0">
+          <div class="toggle-pill-btn ${enabled ? 'active' : ''}" data-cal-toggle="on">On</div>
+          <div class="toggle-pill-btn ${!enabled ? 'active' : ''}" data-cal-toggle="off">Off</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.gcal-cal-row').forEach(row => {
+    row.querySelectorAll('[data-cal-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const calId    = row.dataset.calId;
+        const readOnly = row.dataset.calReadonly === 'true';
+        const colour   = row.dataset.calColour;
+        const name     = row.dataset.calName;
+        const enabled  = btn.dataset.calToggle === 'on';
+
+        const cals = state.data.settings.googleCalendars;
+        const idx  = cals.findIndex(c => c.id === calId);
+        if (idx >= 0) {
+          cals[idx].enabled = enabled;
+        } else {
+          cals.push({ id: calId, name, colour, enabled, readOnly });
+        }
+        saveData();
+        row.querySelectorAll('[data-cal-toggle]').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+  });
+}
+
+function _getReadOnlyEventsForDate(dateKey) {
+  const result = [];
+  const calendars = (state.data.settings?.googleCalendars || []).filter(c => c.enabled && c.readOnly);
+  for (const cal of calendars) {
+    for (const gcalEvt of (state.data.readOnlyEvents?.[cal.id] || [])) {
+      if (gcalEvt.status === 'cancelled') continue;
+      const evtDate = gcalEvt.start?.date || gcalEvt.start?.dateTime?.slice(0, 10);
+      if (evtDate !== dateKey) continue;
+      const time = gcalEvt.start?.dateTime ? gcalEvt.start.dateTime.slice(11, 16) : null;
+      result.push({
+        _readOnly:   true,
+        _calColour:  cal.colour || '#4285f4',
+        _calId:      cal.id,
+        id:          'ro_' + gcalEvt.id,
+        title:       gcalEvt.summary || '(no title)',
+        time,
+      });
+    }
+  }
+  return result;
+}
+
+function _deleteLocalEvent(data, dateKey, evt) {
+  if (evt.googleEventId) {
+    evt.syncStatus = 'deleted';
+  } else {
+    deleteEvent(data, dateKey, evt.id);
+  }
+}
+
+function _persistForGCal(data) {
+  state.data = data;
+  data._lastModified = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  markClean();
+  applyUITheme(data.settings);
+  injectEventThemeCSS(data.settings);
+  renderWeekGrid();
+  scheduleReminders(data);
 }
 
 let _conflictCallbacks = null;
@@ -337,13 +480,21 @@ function renderWeekGrid() {
 
 /** Build the inner HTML for a single day card */
 function buildCardHTML(date, dateKey) {
-  const events  = getEventsForDate(state.data, dateKey);
-  const shown   = events.slice(0, 3);
-  const extra   = events.length - 3;
+  const events  = getEventsForDate(state.data, dateKey).filter(e => e.syncStatus !== 'deleted');
+  const roEvts  = _getReadOnlyEventsForDate(dateKey);
+  const allEvts = events.concat(roEvts);
+  const shown   = allEvts.slice(0, 3);
+  const extra   = allEvts.length - 3;
   const holiday = getHolidayForDate(state.data, dateKey);
   const holidayHTML = holiday ? `<div class="holiday-badge">${esc(holiday)}</div>` : '';
 
   const itemsHTML = shown.map(evt => {
+    if (evt._readOnly) {
+      const dot = `<span class="pill-cal-dot" style="background:${esc(evt._calColour)}"></span>`;
+      return `<div class="event-pill event-pill--event event-pill--readonly">
+        ${dot}<span class="event-pill-text">${evt.time ? evt.time + ' ' : ''}${esc(evt.title)}</span>
+      </div>`;
+    }
     if (evt.type === 'todo') {
       const todoTheme = evt.theme ? ` todo-item--theme-${esc(evt.theme)}` : '';
       return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}${todoTheme}"
@@ -385,11 +536,19 @@ function refreshCardEvents(dateKey) {
   const strip = card.querySelector('.events-strip');
   if (!strip) return;
 
-  const events = getEventsForDate(state.data, dateKey);
-  const shown  = events.slice(0, 3);
-  const extra  = events.length - 3;
+  const events  = getEventsForDate(state.data, dateKey).filter(e => e.syncStatus !== 'deleted');
+  const roEvts  = _getReadOnlyEventsForDate(dateKey);
+  const allEvts = events.concat(roEvts);
+  const shown   = allEvts.slice(0, 3);
+  const extra   = allEvts.length - 3;
 
   strip.innerHTML = shown.map(evt => {
+    if (evt._readOnly) {
+      const dot = `<span class="pill-cal-dot" style="background:${esc(evt._calColour)}"></span>`;
+      return `<div class="event-pill event-pill--event event-pill--readonly">
+        ${dot}<span class="event-pill-text">${evt.time ? evt.time + ' ' : ''}${esc(evt.title)}</span>
+      </div>`;
+    }
     if (evt.type === 'todo') {
       const todoTheme = evt.theme ? ` todo-item--theme-${esc(evt.theme)}` : '';
       return `<div class="todo-item ${evt.done ? 'todo-item--done' : ''}${todoTheme}"
@@ -577,11 +736,26 @@ function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
   if (!list) return;
 
-  const events = getEventsForDate(state.data, dateKey);
+  const events  = getEventsForDate(state.data, dateKey).filter(e => e.syncStatus !== 'deleted');
+  const roEvts  = _getReadOnlyEventsForDate(dateKey);
+  const allEvts = [...events, ...roEvts];
 
-  list.innerHTML = events.length === 0
+  list.innerHTML = allEvts.length === 0
     ? `<div class="expanded-empty">No entries yet. Tap "+ Add Event" Above.</div>`
-    : events.map(evt => {
+    : allEvts.map(evt => {
+        if (evt._readOnly) {
+          const dot = `<span class="expanded-event-dot" style="background:${esc(evt._calColour)};border-radius:50%"></span>`;
+          const time = evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
+          return `
+            <div class="expanded-event-item expanded-event-item--readonly">
+              ${dot}
+              <div class="expanded-event-content">
+                <div class="expanded-event-title">${esc(evt.title)}</div>
+                ${time}
+              </div>
+            </div>`;
+        }
+
         const bell = evt.reminderMinutes != null
           ? `<span class="reminder-icon" title="${evt.reminderMinutes}min reminder">🔔</span>` : '';
 
@@ -643,7 +817,7 @@ function renderExpandedEvents(overlay, dateKey) {
       if (evtToDel.isOccurrence && evtToDel.seriesId) {
         openRepeatActionSheet(evtToDel, dateKey, 'delete');
       } else {
-        deleteEvent(state.data, dateKey, btn.dataset.delete);
+        _deleteLocalEvent(state.data, dateKey, evtToDel);
         saveData();
         renderExpandedEvents(overlay, dateKey);
         refreshVisibleWeekCards();
@@ -1554,6 +1728,23 @@ function openSettingsDropdown() {
             </div>
           </div>
         </div>
+        <div class="settings-section" style="border-top:0.5px solid var(--color-border)">
+          <div class="settings-row">
+            <div>
+              <div class="settings-label">Google Calendar</div>
+              ${gdriveState.userEmail
+                ? `<div class="settings-sublabel">${esc(gdriveState.userEmail)}</div>`
+                : '<div class="settings-sublabel">Not signed in</div>'}
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              ${gdriveState.userEmail
+                ? `<button class="settings-gdrive-btn" data-gcal-action="sync">Sync</button>
+                   <button class="settings-gdrive-btn" data-gcal-action="signout">Sign out</button>`
+                : `<button class="settings-gdrive-btn" data-gcal-action="signin">Sign in</button>`}
+            </div>
+          </div>
+          <div id="gcalCalendarList"></div>
+        </div>
       </div>
     </div>
   `;
@@ -1646,6 +1837,40 @@ function openSettingsDropdown() {
       dropdown.querySelectorAll('[data-gdrive]').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
+
+  dropdown.querySelectorAll('[data-gcal-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.gcalAction;
+      if (action === 'signin') {
+        closeSettingsDropdown();
+        signIn();
+      } else if (action === 'signout') {
+        closeSettingsDropdown();
+        signOut();
+        state.data.settings.googleAuth.connectedEmail = '';
+        state.data.settings.googleCalendars = [];
+        state.data.settings.chronicleCalendarId = null;
+        state.data.readOnlyEvents = {};
+        saveData();
+        renderWeekGrid();
+      } else if (action === 'sync') {
+        closeSettingsDropdown();
+        _runFullSync();
+      }
+    });
+  });
+
+  // Populate calendar list if signed in
+  if (gdriveState.token) {
+    const listEl = dropdown.querySelector('#gcalCalendarList');
+    if (listEl) {
+      listEl.innerHTML = '<div class="settings-row" style="opacity:0.5;font-size:12px">Loading calendars…</div>';
+      fetchCalendarList().then(cals => {
+        if (!_settingsDropdown) return; // closed before fetch returned
+        _renderGCalCalendarList(listEl, cals);
+      });
+    }
+  }
 
   dropdown.querySelectorAll('[data-holidays]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2381,6 +2606,9 @@ function init() {
     } else if (status === 'synced') {
       state.data.settings.gdrive.lastSync = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+    } else if (status === 'signed') {
+      // Token refreshed — trigger full GCal sync if we have a token now
+      _runFullSync();
     }
   });
 
@@ -2404,13 +2632,20 @@ function init() {
   document.getElementById('btnJumpDate').addEventListener('click', openDatePicker);
   document.getElementById('btnSearch').addEventListener('click', openSearch);
   document.getElementById('btnAgenda').addEventListener('click', openAgendaPanel);
-  document.getElementById('btnSync').addEventListener('click', () =>
-    syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn)
-  );
+  document.getElementById('btnSync').addEventListener('click', () => {
+    if (gdriveState.token) {
+      _runFullSync();
+    } else {
+      syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn);
+    }
+  });
   document.getElementById('btnAdd').addEventListener('click', () => {
     openAddEventModal(_lastFocusedDate ?? formatDate(state.today));
   });
   document.getElementById('btnSettings').addEventListener('click', openSettingsDropdown);
+
+  // Sync when coming back online
+  window.addEventListener('online', () => _runFullSync());
 
   // ── Edge nav arrows (Left/Right = week, Up/Down = first of month) ──
   document.getElementById('navPrevWeek').addEventListener('click', prevMonthFirst);
@@ -2495,7 +2730,7 @@ function init() {
       if (evt.isOccurrence && evt.seriesId) {
         openRepeatActionSheet(evt, dateKey, 'delete');
       } else {
-        deleteEvent(state.data, dateKey, todoId);
+        _deleteLocalEvent(state.data, dateKey, evt);
         saveData();
         refreshVisibleWeekCards();
       }
@@ -2555,7 +2790,7 @@ function init() {
       if (evt.isOccurrence && evt.seriesId) {
         openRepeatActionSheet(evt, dateKey, 'delete');
       } else {
-        deleteEvent(state.data, dateKey, evt.id);
+        _deleteLocalEvent(state.data, dateKey, evt);
         saveData();
         refreshVisibleWeekCards();
       }

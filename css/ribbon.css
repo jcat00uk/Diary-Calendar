@@ -100,3 +100,11 @@
   background: var(--accent-amber-text);
   pointer-events: none;
 }
+
+.icon-btn--syncing .icon {
+  animation: chronicle-spin 1s linear infinite;
+}
+
+@keyframes chronicle-spin {
+  to { transform: rotate(360deg); }
+}

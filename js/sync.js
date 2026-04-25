@@ -1,20 +1,32 @@
-/** Chronicle — Google Drive Backup */
+/** Chronicle — Google Drive Backup + Google Calendar Sync */
 
-const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata email';
-const GDRIVE_FILE  = 'chronicle-data.json';
-const CLIENT_ID    = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
-const BG_THROTTLE  = 30_000;
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-let _tokenClient      = null;
-let _pendingAfterAuth = false;
-let _lastBgSync       = 0;
-let _dirtyCallback    = null;
-let _statusCallback   = null;
+const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata email';
+const CONSENTED_SCOPE_KEY = 'chronicle_consentedScope';
+const GDRIVE_FILE   = 'chronicle-data.json';
+const CLIENT_ID     = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
+const GCAL_BASE     = 'https://www.googleapis.com/calendar/v3';
+const BG_THROTTLE   = 30_000;
+
+// ── Module state ──────────────────────────────────────────────────────────────
+
+let _tokenClient       = null;
+let _pendingAfterAuth  = false;
+let _lastBgSync        = 0;
+let _tokenRefreshTimer = null;
+let _dirtyCallback     = null;
+let _statusCallback    = null;
+
+// Tracks throttle for fullSync; separate from GDrive bgSync throttle
+let _lastGCalSync    = 0;
+let _gcalRetryTimer  = null;
 
 export const gdriveState = {
-  token:     null,
-  fileId:    null,
-  userEmail: null,
+  token:          null,
+  tokenExpiresAt: 0,
+  fileId:         null,
+  userEmail:      null,
 };
 
 // ── Dirty badge ───────────────────────────────────────────────────────────────
@@ -42,7 +54,15 @@ export function initGoogleAuth() {
         return;
       }
 
-      gdriveState.token = resp.access_token;
+      gdriveState.token          = resp.access_token;
+      gdriveState.tokenExpiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000;
+
+      // Re-request token 5 minutes before it expires
+      clearTimeout(_tokenRefreshTimer);
+      const refreshIn = Math.max(0, gdriveState.tokenExpiresAt - Date.now() - 5 * 60_000);
+      _tokenRefreshTimer = setTimeout(() => {
+        _tokenClient?.requestAccessToken({ prompt: 'none' });
+      }, refreshIn);
 
       const saved = localStorage.getItem('chronicle_userEmail');
       try {
@@ -50,8 +70,9 @@ export function initGoogleAuth() {
           'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + resp.access_token
         ).then(r => r.json());
         const email = info.email || saved || 'Signed in';
-        localStorage.setItem('chronicle_userEmail',      email);
-        localStorage.setItem('chronicle_hasConsented',   '1');
+        localStorage.setItem('chronicle_userEmail',    email);
+        localStorage.setItem('chronicle_hasConsented', '1');
+        localStorage.setItem(CONSENTED_SCOPE_KEY,      GDRIVE_SCOPE);
         gdriveState.userEmail = email;
       } catch {
         gdriveState.userEmail = saved || 'Signed in';
@@ -66,13 +87,19 @@ export function initGoogleAuth() {
     },
   });
 
-  const prevEmail    = localStorage.getItem('chronicle_userEmail');
-  const hasConsented = localStorage.getItem('chronicle_hasConsented');
+  const prevEmail      = localStorage.getItem('chronicle_userEmail');
+  const hasConsented   = localStorage.getItem('chronicle_hasConsented');
+  const consentedScope = localStorage.getItem(CONSENTED_SCOPE_KEY);
+  const scopeUpgraded  = consentedScope !== GDRIVE_SCOPE;
 
-  if (prevEmail && hasConsented) {
+  if (prevEmail && hasConsented && !scopeUpgraded) {
     gdriveState.userEmail = prevEmail;
     _statusCallback?.('signed', prevEmail);
     _tokenClient.requestAccessToken({ prompt: 'none' });
+  } else if (prevEmail && hasConsented && scopeUpgraded) {
+    // Scope changed — silent refresh can't grant new permissions; wait for user tap
+    gdriveState.userEmail = prevEmail;
+    _statusCallback?.('signed', prevEmail);
   }
 }
 
@@ -85,11 +112,14 @@ export function signIn() {
 
 export function signOut() {
   if (gdriveState.token) google.accounts.oauth2.revoke(gdriveState.token, () => {});
-  gdriveState.token     = null;
-  gdriveState.fileId    = null;
-  gdriveState.userEmail = null;
+  clearTimeout(_tokenRefreshTimer);
+  gdriveState.token          = null;
+  gdriveState.tokenExpiresAt = 0;
+  gdriveState.fileId         = null;
+  gdriveState.userEmail      = null;
   localStorage.removeItem('chronicle_userEmail');
   localStorage.removeItem('chronicle_hasConsented');
+  localStorage.removeItem(CONSENTED_SCOPE_KEY);
   _statusCallback?.('unsigned', null);
 }
 
@@ -145,7 +175,7 @@ async function upload(payload) {
   gdriveState.fileId = result.id;
 }
 
-// ── Sync engine ───────────────────────────────────────────────────────────────
+// ── Drive sync engine ─────────────────────────────────────────────────────────
 
 export async function syncNow(data, persist, onConflict, showToast) {
   if (!CLIENT_ID) { showToast?.('Client ID not configured'); return; }
@@ -204,8 +234,8 @@ export async function syncNow(data, persist, onConflict, showToast) {
         showToast?.('Session expired — sign in again');
       }
     }
-    else if (!navigator.onLine)          { _statusCallback?.('error');    showToast?.('No internet'); }
-    else                                 { _statusCallback?.('error');    showToast?.('Sync error: ' + err.message); }
+    else if (!navigator.onLine) { _statusCallback?.('error'); showToast?.('No internet'); }
+    else                        { _statusCallback?.('error'); showToast?.('Sync error: ' + err.message); }
   }
 }
 
@@ -218,13 +248,301 @@ function _markSynced(showToast, msg) {
 export async function bgSync(data, persist, onConflict) {
   if (!gdriveState.token) return;
   if (!data.settings?.gdrive?.enabled) return;
-  const lt  = new Date(data._lastModified              || 0).getTime();
-  const st  = new Date(data.settings.gdrive.lastSync   || 0).getTime();
+  const lt  = new Date(data._lastModified            || 0).getTime();
+  const st  = new Date(data.settings.gdrive.lastSync || 0).getTime();
   if (lt <= st + 2000) return;
   const now = Date.now();
   if (now - _lastBgSync < BG_THROTTLE) return;
   _lastBgSync = now;
   await syncNow(data, persist, onConflict, null);
+}
+
+// ── GCal API ──────────────────────────────────────────────────────────────────
+
+async function gcalRequest(url, options = {}) {
+  if (!gdriveState.token) throw new Error('not_signed_in');
+  const resp = await fetch(url, {
+    ...options,
+    headers: { Authorization: 'Bearer ' + gdriveState.token, ...(options.headers || {}) },
+  });
+  if (resp.status === 401) { gdriveState.token = null; throw new Error('auth_expired'); }
+  if (resp.status === 403) throw new Error('access_denied');
+  if (resp.status === 429) throw new Error('rate_limited');
+  return resp;
+}
+
+async function ensureChronicleCalendar(data) {
+  const settings = data.settings;
+  if (settings.chronicleCalendarId) return settings.chronicleCalendarId;
+
+  const resp = await gcalRequest(`${GCAL_BASE}/users/me/calendarList`);
+  const list = await resp.json();
+  const existing = list.items?.find(c => c.summary === 'Chronicle');
+
+  if (existing) {
+    settings.chronicleCalendarId = existing.id;
+    return existing.id;
+  }
+
+  const createResp = await gcalRequest(`${GCAL_BASE}/calendars`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ summary: 'Chronicle' }),
+  });
+  const created = await createResp.json();
+  settings.chronicleCalendarId = created.id;
+  return created.id;
+}
+
+// ── GCal event mapping ────────────────────────────────────────────────────────
+
+const _fmtDate = d =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function buildGCalEvent(evt, dateKey, tz) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+
+  let start, end;
+  if (evt.time) {
+    const [h, min] = evt.time.split(':').map(Number);
+    const startDate = new Date(y, m - 1, d, h, min);
+    start = { dateTime: startDate.toISOString(), timeZone: tz };
+    if (evt.endTime) {
+      const [eh, em] = evt.endTime.split(':').map(Number);
+      end = { dateTime: new Date(y, m - 1, d, eh, em).toISOString(), timeZone: tz };
+    } else {
+      end = { dateTime: new Date(startDate.getTime() + 3_600_000).toISOString(), timeZone: tz };
+    }
+  } else {
+    start = { date: dateKey };
+    end   = { date: _fmtDate(new Date(y, m - 1, d + 1)) };
+  }
+
+  const gcalEvt = {
+    summary: evt.title,
+    start,
+    end,
+    extendedProperties: { private: { chronicleId: evt.id } },
+  };
+
+  if (evt.notes)                    gcalEvt.description = evt.notes;
+  if (evt.reminderMinutes != null)  gcalEvt.reminders   = {
+    useDefault: false,
+    overrides: [{ method: 'popup', minutes: evt.reminderMinutes }],
+  };
+
+  return gcalEvt;
+}
+
+function parseGCalEvent(gcalEvt) {
+  const isAllDay = !!gcalEvt.start?.date;
+  const time     = isAllDay ? null : (gcalEvt.start?.dateTime || '').slice(11, 16);
+  const popupReminder = gcalEvt.reminders?.overrides?.find(r => r.method === 'popup');
+
+  return {
+    title:            gcalEvt.summary || '(no title)',
+    time,
+    notes:            gcalEvt.description || '',
+    reminderMinutes:  popupReminder?.minutes ?? null,
+    googleEventId:    gcalEvt.id,
+    googleCalendarId: gcalEvt.organizer?.email || null,
+    syncStatus:       'synced',
+    lastSyncedAt:     gcalEvt.updated || new Date().toISOString(),
+  };
+}
+
+function gcalEventDateKey(gcalEvt) {
+  if (gcalEvt.start?.date)     return gcalEvt.start.date;
+  if (gcalEvt.start?.dateTime) return gcalEvt.start.dateTime.slice(0, 10);
+  return null;
+}
+
+// ── GCal sync functions ───────────────────────────────────────────────────────
+
+export async function syncToGCal(data) {
+  if (!gdriveState.token) return;
+
+  const chronicleCalId = await ensureChronicleCalendar(data);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  for (const [dateKey, day] of Object.entries(data.days || {})) {
+    const events   = day.events || [];
+    const toRemove = [];
+
+    for (const evt of events) {
+      if (evt.type === 'todo') continue;
+      const status = evt.syncStatus;
+
+      if (status === 'pending') {
+        const gcalEvt = buildGCalEvent(evt, dateKey, tz);
+        if (!evt.googleEventId) {
+          const resp = await gcalRequest(
+            `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+          );
+          const created     = await resp.json();
+          evt.googleEventId    = created.id;
+          evt.googleCalendarId = chronicleCalId;
+          evt.syncStatus       = 'synced';
+          evt.lastSyncedAt     = new Date().toISOString();
+        } else {
+          const calId = evt.googleCalendarId || chronicleCalId;
+          const resp = await gcalRequest(
+            `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
+            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gcalEvt) }
+          );
+          if (resp.ok) {
+            evt.syncStatus   = 'synced';
+            evt.lastSyncedAt = new Date().toISOString();
+          }
+        }
+      } else if (status === 'deleted') {
+        if (evt.googleEventId) {
+          const calId = evt.googleCalendarId || chronicleCalId;
+          await gcalRequest(
+            `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evt.googleEventId)}`,
+            { method: 'DELETE' }
+          );
+        }
+        toRemove.push(evt.id);
+      }
+    }
+
+    if (toRemove.length) {
+      day.events = events.filter(e => !toRemove.includes(e.id));
+    }
+  }
+}
+
+export async function syncFromGCal(data) {
+  if (!gdriveState.token) return;
+
+  const chronicleCalId = await ensureChronicleCalendar(data);
+  const now = new Date();
+  const timeMin = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString();
+  const timeMax = new Date(now.getFullYear(), now.getMonth() + 12, now.getDate()).toISOString();
+
+  const url = `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events` +
+    `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
+    `&singleEvents=true&orderBy=startTime&maxResults=2500`;
+
+  const resp   = await gcalRequest(url);
+  const result = await resp.json();
+
+  // Build lookup: googleEventId → { dateKey, evt }
+  const localByGCalId = {};
+  for (const [dateKey, day] of Object.entries(data.days || {})) {
+    for (const evt of (day.events || [])) {
+      if (evt.googleEventId) localByGCalId[evt.googleEventId] = { dateKey, evt };
+    }
+  }
+
+  for (const gcalEvt of (result.items || [])) {
+    if (gcalEvt.status === 'cancelled') continue;
+
+    const local = localByGCalId[gcalEvt.id];
+    if (local) {
+      const gcalUpdated = new Date(gcalEvt.updated).getTime();
+      const localSynced = new Date(local.evt.lastSyncedAt || 0).getTime();
+      if (gcalUpdated > localSynced) {
+        Object.assign(local.evt, parseGCalEvent(gcalEvt));
+      }
+    } else {
+      const dateKey = gcalEventDateKey(gcalEvt);
+      if (!dateKey) continue;
+      if (!data.days[dateKey]) data.days[dateKey] = { diary: '', events: [], images: [] };
+      data.days[dateKey].events.push({
+        id:       'gcal_' + gcalEvt.id,
+        type:     'event',
+        done:     false,
+        repeat:   null,
+        theme:    null,
+        created:  Date.now(),
+        modified: Date.now(),
+        ...parseGCalEvent(gcalEvt),
+      });
+    }
+  }
+}
+
+export async function pullReadOnlyCalendars(data) {
+  if (!gdriveState.token) return;
+  if (!data.readOnlyEvents) data.readOnlyEvents = {};
+
+  const calendars = (data.settings.googleCalendars || []).filter(c => c.enabled && c.readOnly);
+  if (!calendars.length) return;
+
+  const now     = new Date();
+  const timeMin = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString();
+  const timeMax = new Date(now.getFullYear(), now.getMonth() + 12, 31).toISOString();
+
+  for (const cal of calendars) {
+    try {
+      const url = `${GCAL_BASE}/calendars/${encodeURIComponent(cal.id)}/events` +
+        `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
+        `&singleEvents=true&orderBy=startTime&maxResults=2500`;
+      const resp   = await gcalRequest(url);
+      const result = await resp.json();
+      data.readOnlyEvents[cal.id] = result.items || [];
+    } catch (err) {
+      console.warn('[Chronicle GCal] read-only pull failed:', cal.id, err.message);
+    }
+  }
+}
+
+export async function fullSync(data, persist, showToast, onStart, onEnd) {
+  if (!gdriveState.token) return;
+
+  if (!navigator.onLine) {
+    showToast?.('Offline');
+    return;
+  }
+
+  const now = Date.now();
+  if (now - _lastGCalSync < 30_000) return;
+  _lastGCalSync = now;
+
+  onStart?.();
+
+  try {
+    await syncToGCal(data);
+    await syncFromGCal(data);
+    await pullReadOnlyCalendars(data);
+    persist(data);
+    markClean();
+    data.settings.lastFullSync = Date.now();
+    onEnd?.('success');
+  } catch (err) {
+    console.error('[Chronicle fullSync]', err);
+    onEnd?.('error');
+
+    if (err.message === 'auth_expired') {
+      _tokenClient?.requestAccessToken({ prompt: 'none' });
+    } else if (err.message === 'access_denied') {
+      showToast?.('Calendar access denied — check permissions');
+    } else if (err.message === 'rate_limited') {
+      showToast?.('Google Calendar rate limit — retrying in 60s');
+      clearTimeout(_gcalRetryTimer);
+      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 60_000);
+    } else if (!navigator.onLine) {
+      showToast?.('Offline');
+      clearTimeout(_gcalRetryTimer);
+      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 30_000);
+    } else {
+      showToast?.('Sync error — retrying in 30s');
+      clearTimeout(_gcalRetryTimer);
+      _gcalRetryTimer = setTimeout(() => fullSync(data, persist, showToast, onStart, onEnd), 30_000);
+    }
+  }
+}
+
+export async function fetchCalendarList() {
+  if (!gdriveState.token) return [];
+  try {
+    const resp   = await gcalRequest(`${GCAL_BASE}/users/me/calendarList?maxResults=100`);
+    const result = await resp.json();
+    return result.items || [];
+  } catch { return []; }
 }
 
 // ── Android WebView bridge ────────────────────────────────────────────────────

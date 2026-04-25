@@ -45,6 +45,10 @@ export function addEvent(data, dateKey, eventData) {
     theme: eventData.theme || null,
     created: Date.now(),
     modified: Date.now(),
+    googleEventId:    null,
+    googleCalendarId: null,
+    syncStatus:       'pending',
+    lastSyncedAt:     null,
   };
   day.events.push(event);
   return event;
@@ -56,7 +60,13 @@ export function updateEvent(data, dateKey, eventId, updates) {
   if (!events) return null;
   const idx = events.findIndex(e => e.id === eventId);
   if (idx === -1) return null;
-  events[idx] = { ...events[idx], ...updates, modified: Date.now() };
+  const prev = events[idx];
+  events[idx] = {
+    ...prev,
+    ...updates,
+    modified: Date.now(),
+    syncStatus: prev.googleEventId ? 'pending' : (prev.syncStatus ?? 'pending'),
+  };
   return events[idx];
 }
 
