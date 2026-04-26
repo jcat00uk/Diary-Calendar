@@ -469,9 +469,10 @@ function _getMultidayBarColor(evt) {
 }
 
 function renderMultidayBars() {
-  const grid = document.getElementById('weekGrid');
+  const grid      = document.getElementById('weekGrid');
   if (!grid) return;
-  grid.querySelector('.multiday-overlay')?.remove();
+  const container = grid.parentElement; // .grid-with-sides — a flex container, not a grid
+  container.querySelector('.multiday-overlay')?.remove();
 
   const weekDays = getDaysOfWeek(state.currentWeekStart);
   const firstKey = formatDate(weekDays[0]);
@@ -503,7 +504,9 @@ function renderMultidayBars() {
 
   if (multiday.length === 0) return;
 
-  const gridRect = grid.getBoundingClientRect();
+  const gridRect      = grid.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
   const cardRects = {};
   for (const d of weekDays) {
     const dk = formatDate(d);
@@ -520,7 +523,13 @@ function renderMultidayBars() {
 
   const overlay = document.createElement('div');
   overlay.className = 'multiday-overlay';
-  grid.appendChild(overlay);
+  // Position the overlay to cover the grid exactly, but parent it on the flex
+  // container so it is never a CSS-grid child (avoids auto-placement slot bugs)
+  overlay.style.left   = `${gridRect.left   - containerRect.left}px`;
+  overlay.style.top    = `${gridRect.top    - containerRect.top}px`;
+  overlay.style.width  = `${gridRect.width}px`;
+  overlay.style.height = `${gridRect.height}px`;
+  container.appendChild(overlay);
 
   const BAR_H       = 14;
   const BAR_Y_START = 26;
@@ -2944,7 +2953,8 @@ async function init() {
   });
 
   // ── Swipe + long-press on week grid ──
-  const weekGrid = document.getElementById('weekGrid');
+  const weekGrid      = document.getElementById('weekGrid');
+  const gridWithSides = weekGrid.parentElement;
   initGestures(weekGrid, {
     onLongPress: dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
   });
@@ -3082,7 +3092,7 @@ async function init() {
   });
 
   // ── Delegated: multi-day bar inline detail ──
-  weekGrid.addEventListener('click', e => {
+  gridWithSides.addEventListener('click', e => {
     const bar = e.target.closest('.multiday-bar');
     if (!bar) return;
     e.stopPropagation();
