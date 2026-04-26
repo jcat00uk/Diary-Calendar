@@ -839,16 +839,9 @@ select.field-input {
   display: inline-block;
 }
 
-.gcal-readonly-badge {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-tertiary);
-  border: 0.5px solid var(--color-border-strong);
-  border-radius: 4px;
-  padding: 1px 4px;
-  flex-shrink: 0;
+/* View-only / read-only calendars are dimmed so the name gets full space */
+.gcal-cal-row--dim .settings-label {
+  opacity: 0.5;
 }
 
 /* ── Read-only event pills ─────────────────────────────────── */

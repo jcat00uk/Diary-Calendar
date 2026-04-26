@@ -146,6 +146,7 @@
   gap: 6px;
   height: 100%;
   min-height: 0;
+  min-width: 0;        /* prevents long event titles inside Sat/Sun from inflating the grid column */
 }
 
 .weekend-col .day-card {
