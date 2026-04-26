@@ -20,7 +20,7 @@ import {
   createRepeatRule,
 } from './events.js'
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
-import { initGestures } from './gestures.js';
+import { initGestures, initSwipe } from './gestures.js';
 import { pushUndo, undo, redo, canUndo, canRedo } from './undo.js';
 import {
   markDirty, markClean,
@@ -911,6 +911,12 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
   overlay.querySelector('.expanded-back').addEventListener('click', () => history.back());
   overlay.querySelector('.expanded-side-nav--left').addEventListener('click', () => navigateExpandedDay(prevDate));
   overlay.querySelector('.expanded-side-nav--right').addEventListener('click', () => navigateExpandedDay(nextDate));
+
+  // Swipe left/right = prev/next day
+  initSwipe(overlay, {
+    onSwipeLeft:  () => navigateExpandedDay(nextDate),
+    onSwipeRight: () => navigateExpandedDay(prevDate),
+  });
   overlay.querySelector('.expanded-add-btn').addEventListener('click', () => {
     history.back();
     setTimeout(() => openAddEventModal(dateKey), 350);
@@ -2956,7 +2962,11 @@ async function init() {
   const weekGrid      = document.getElementById('weekGrid');
   const gridWithSides = weekGrid.parentElement;
   initGestures(weekGrid, {
-    onLongPress: dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
+    onLongPress:  dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
+    onSwipeLeft:  () => nextWeek(),
+    onSwipeRight: () => prevWeek(),
+    onSwipeUp:    () => nextMonth(),
+    onSwipeDown:  () => prevMonth(),
   });
 
   // ── Delegated: todo checkbox toggle ──
