@@ -100,6 +100,8 @@
 .week-grid {
   flex: 1;
   min-height: 0;
+  min-width: 0;        /* prevents long GCal titles from inflating the flex item */
+  overflow: hidden;
   display: grid;
   gap: 6px;
   padding: 7px;
@@ -195,5 +197,29 @@
   white-space: nowrap;
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+
+/* ── Swipe direction hint ─────────────────────────────── */
+
+.swipe-hint {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 6px 13px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.52);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.swipe-hint--visible {
+  opacity: 1;
 }
 

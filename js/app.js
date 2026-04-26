@@ -150,6 +150,7 @@ const state = {
 
 let _lastFocusedDate      = null;
 let _suppressNextCardClick = false; // set after gesture long-press to eat the trailing click
+let _swipeHintEl          = null;
 
 // ── Data layer ─────────────────────────────────────────────────────────────
 
@@ -458,6 +459,31 @@ function esc(str) {
 
 // ── Week grid rendering ────────────────────────────────────────────────────
 
+function _showSwipeHint(dir, context) {
+  if (!_swipeHintEl) return;
+  if (!dir) {
+    _swipeHintEl.classList.remove('swipe-hint--visible');
+    return;
+  }
+  const isExpanded = context === 'expanded';
+  const labels = {
+    left:  isExpanded ? 'Next day →'   : 'Next week →',
+    right: isExpanded ? '← Prev day'   : '← Prev week',
+    up:    'Next month ↑',
+    down:  '↓ Prev month',
+  };
+  const label = labels[dir];
+  if (!label) return;
+  _swipeHintEl.textContent = label;
+  const W = window.innerWidth, H = window.innerHeight;
+  Object.assign(_swipeHintEl.style, { left: '', right: '', top: '', bottom: '', transform: '' });
+  if (dir === 'left')  Object.assign(_swipeHintEl.style, { right: '16px', top: `${H / 2}px`, transform: 'translateY(-50%)' });
+  if (dir === 'right') Object.assign(_swipeHintEl.style, { left:  '16px', top: `${H / 2}px`, transform: 'translateY(-50%)' });
+  if (dir === 'up')    Object.assign(_swipeHintEl.style, { bottom: '40px', left: `${W / 2}px`, transform: 'translateX(-50%)' });
+  if (dir === 'down')  Object.assign(_swipeHintEl.style, { top:   '80px', left: `${W / 2}px`, transform: 'translateX(-50%)' });
+  _swipeHintEl.classList.add('swipe-hint--visible');
+}
+
 function _getMultidayBarColor(evt) {
   if (evt.theme) {
     const c = getComputedStyle(document.documentElement)
@@ -536,6 +562,13 @@ function renderMultidayBars() {
   const BAR_GAP     = 2;
   const rowStacks   = new Map(); // rowKey → nextBarTop
 
+  // Group days into CSS grid rows by day-of-week — immune to sub-pixel rendering variance
+  const ws = state.data.settings.weekStart || 'mon';
+  const _DOW_ROW = ws === 'mon'
+    ? { sun: 2, mon: 0, tue: 0, wed: 1, thu: 1, fri: 2, sat: 2 }
+    : { sun: 0, mon: 1, tue: 1, wed: 2, thu: 2, fri: 3, sat: 3 };
+  const _dowAbbr = dk => ['sun','mon','tue','wed','thu','fri','sat'][new Date(dk + 'T00:00').getDay()];
+
   for (const { evt, startKey } of multiday) {
     const coveredKeys = weekDays
       .map(d => formatDate(d))
@@ -546,7 +579,7 @@ function renderMultidayBars() {
     for (const dk of coveredKeys) {
       const r = cardRects[dk];
       if (!r) continue;
-      const rowKey = Math.round(r.top / 16) * 16;
+      const rowKey = _DOW_ROW[_dowAbbr(dk)] ?? 0;
       if (!rows.has(rowKey)) rows.set(rowKey, []);
       rows.get(rowKey).push(dk);
     }
@@ -916,6 +949,7 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
   initSwipe(overlay, {
     onSwipeLeft:  () => navigateExpandedDay(nextDate),
     onSwipeRight: () => navigateExpandedDay(prevDate),
+    onHint:       dir => _showSwipeHint(dir, 'expanded'),
   });
   overlay.querySelector('.expanded-add-btn').addEventListener('click', () => {
     history.back();
@@ -2961,12 +2995,18 @@ async function init() {
   // ── Swipe + long-press on week grid ──
   const weekGrid      = document.getElementById('weekGrid');
   const gridWithSides = weekGrid.parentElement;
+  // Create the swipe hint overlay (one element reused for all gestures)
+  _swipeHintEl = document.createElement('div');
+  _swipeHintEl.className = 'swipe-hint';
+  document.body.appendChild(_swipeHintEl);
+
   initGestures(weekGrid, {
     onLongPress:  dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
     onSwipeLeft:  () => nextWeek(),
     onSwipeRight: () => prevWeek(),
     onSwipeUp:    () => nextMonth(),
     onSwipeDown:  () => prevMonth(),
+    onHint:       dir => _showSwipeHint(dir, 'week'),
   });
 
   // ── Delegated: todo checkbox toggle ──

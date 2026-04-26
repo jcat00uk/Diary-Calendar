@@ -4,12 +4,14 @@ const LONG_PRESS_MS  = 480;
 const MOVE_CANCEL_PX = 12;
 const SWIPE_MIN_PX   = 50;
 const SWIPE_RATIO    = 1.8; // primary axis must be this many times larger than secondary
+const HINT_PX        = 22;  // displacement to show swipe direction hint
 
 export function initGestures(el, callbacks) {
   let startX = 0, startY = 0;
   let startTarget = null;
   let moved = false;
   let longPressTimer = null;
+  let hintFired = false;
 
   // ── Touch ───────────────────────────────────────────────────────────────
   el.addEventListener('touchstart', e => {
@@ -18,6 +20,7 @@ export function initGestures(el, callbacks) {
     startY      = t.clientY;
     startTarget = e.target;
     moved       = false;
+    hintFired   = false;
 
     // Long-press only triggers outside editable areas; swipe still works anywhere
     if (!e.target.closest('[contenteditable]')) {
@@ -32,20 +35,32 @@ export function initGestures(el, callbacks) {
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
-    if (!startTarget || moved) return;
-    const t  = e.touches[0];
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX) {
+    if (!startTarget) return;
+    const t   = e.touches[0];
+    const dx  = t.clientX - startX;
+    const dy  = t.clientY - startY;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+
+    if (!moved && (adx > MOVE_CANCEL_PX || ady > MOVE_CANCEL_PX)) {
       moved = true;
       clearTimeout(longPressTimer);
       el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
+    }
+
+    if (moved && !hintFired) {
+      let dir = null;
+      if (adx >= HINT_PX && adx > ady) dir = dx < 0 ? 'left' : 'right';
+      else if (ady >= HINT_PX && ady > adx) dir = dy < 0 ? 'up' : 'down';
+      if (dir) { hintFired = true; callbacks.onHint?.(dir); }
     }
   }, { passive: true });
 
   el.addEventListener('touchend', e => {
     clearTimeout(longPressTimer);
     el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
+    callbacks.onHint?.(null);
+    hintFired = false;
 
     if (startTarget && moved) {
       const t   = e.changedTouches[0];
@@ -69,6 +84,8 @@ export function initGestures(el, callbacks) {
   el.addEventListener('touchcancel', () => {
     clearTimeout(longPressTimer);
     el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
+    callbacks.onHint?.(null);
+    hintFired = false;
     startTarget = null;
   }, { passive: true });
 
@@ -110,18 +127,35 @@ export function initGestures(el, callbacks) {
 
 /** Lightweight swipe-only detector for overlays (expanded day, modals). */
 export function initSwipe(el, callbacks) {
-  let startX = 0, startY = 0, active = false;
+  let startX = 0, startY = 0, active = false, hintFired = false;
 
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('[contenteditable]')) return;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    active = true;
+    startX    = e.touches[0].clientX;
+    startY    = e.touches[0].clientY;
+    active    = true;
+    hintFired = false;
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    if (!active || hintFired) return;
+    const dx  = e.touches[0].clientX - startX;
+    const dy  = e.touches[0].clientY - startY;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    if (adx >= HINT_PX && adx > ady) {
+      hintFired = true;
+      callbacks.onHint?.(dx < 0 ? 'left' : 'right');
+    } else if (ady >= HINT_PX && ady > adx) {
+      hintFired = true;
+      callbacks.onHint?.(dy < 0 ? 'up' : 'down');
+    }
   }, { passive: true });
 
   el.addEventListener('touchend', e => {
     if (!active) return;
-    active = false;
+    active    = false;
+    hintFired = false;
+    callbacks.onHint?.(null);
     const dx  = e.changedTouches[0].clientX - startX;
     const dy  = e.changedTouches[0].clientY - startY;
     const adx = Math.abs(dx);
@@ -135,5 +169,9 @@ export function initSwipe(el, callbacks) {
     }
   }, { passive: true });
 
-  el.addEventListener('touchcancel', () => { active = false; }, { passive: true });
+  el.addEventListener('touchcancel', () => {
+    active    = false;
+    hintFired = false;
+    callbacks.onHint?.(null);
+  }, { passive: true });
 }
