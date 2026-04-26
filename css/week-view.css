@@ -158,6 +158,10 @@
   inset: 0;
   pointer-events: none;
   z-index: 2;
+  overflow: hidden;
+  /* Span all grid cells so auto-placement doesn't consume an extra slot */
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
 }
 
 .multiday-bar {
@@ -166,6 +170,7 @@
   align-items: center;
   overflow: hidden;
   cursor: pointer;
+  pointer-events: auto;
   opacity: 0.93;
   transition: opacity 0.1s, filter 0.1s;
 }

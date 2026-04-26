@@ -461,7 +461,7 @@ function esc(str) {
 function _getMultidayBarColor(evt) {
   if (evt.theme) {
     const c = getComputedStyle(document.documentElement)
-      .getPropertyValue(`--evt-${evt.theme}-bg`).trim();
+      .getPropertyValue(`--evt-${evt.theme}-text`).trim();
     if (c) return c;
   }
   return getComputedStyle(document.documentElement)
@@ -566,7 +566,10 @@ function renderMultidayBars() {
         `background:${_getMultidayBarColor(evt)};` +
         `border-radius:${r1} ${r2} ${r2} ${r1};`;
       if (barStartsThisWeek) {
-        bar.innerHTML = `<span class="multiday-bar-label">${esc(stripHTML(evt.title))}</span>`;
+        const labelEl = document.createElement('span');
+        labelEl.className = 'multiday-bar-label';
+        labelEl.innerHTML = sanitizeDiaryHTML(evt.title);
+        bar.appendChild(labelEl);
       }
       overlay.appendChild(bar);
     }
@@ -3087,20 +3090,20 @@ async function init() {
     const startKey = bar.dataset.startKey;
     const evtId    = bar.dataset.evtId;
 
+    const overlay      = bar.closest('.multiday-overlay');
+    const existingDetail = overlay?.querySelector('.multiday-detail');
+    const wasThisBar   = existingDetail?.dataset.forId === evtId;
+
     document.querySelectorAll('.multiday-detail').forEach(d => d.remove());
     document.querySelectorAll('.multiday-bar--active').forEach(b => b.classList.remove('multiday-bar--active'));
 
-    if (bar.classList.contains('multiday-bar--was-active')) {
-      bar.classList.remove('multiday-bar--was-active');
-      return;
-    }
+    if (wasThisBar) return;
 
     const evt = state.data.days[startKey]?.events?.find(ev => ev.id === evtId);
     if (!evt) return;
 
     bar.classList.add('multiday-bar--active');
 
-    const overlay  = bar.closest('.multiday-overlay');
     const barRect  = bar.getBoundingClientRect();
     const gridRect = weekGrid.getBoundingClientRect();
 
