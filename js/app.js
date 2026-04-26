@@ -499,6 +499,9 @@ function renderMultidayBars() {
   const container = grid.parentElement; // .grid-with-sides — a flex container, not a grid
   container.querySelector('.multiday-overlay')?.remove();
 
+  // Reset events-strip padding from any previous bar render
+  grid.querySelectorAll('.events-strip').forEach(s => { s.style.paddingTop = ''; });
+
   const weekDays = getDaysOfWeek(state.currentWeekStart);
   const firstKey = formatDate(weekDays[0]);
   const lastKey  = formatDate(weekDays[weekDays.length - 1]);
@@ -560,6 +563,7 @@ function renderMultidayBars() {
   const BAR_Y_START = 26;
   const BAR_GAP     = 2;
   const rowStacks   = new Map(); // rowKey → nextBarTop
+  const barsPerDay  = new Map(); // dateKey → bar count (for events-strip padding)
 
   // Group days into CSS grid rows by day-of-week — immune to sub-pixel rendering variance
   const ws = state.data.settings.weekStart || 'mon';
@@ -593,6 +597,9 @@ function renderMultidayBars() {
       const barTop = rowStacks.get(rowKey);
       rowStacks.set(rowKey, barTop + BAR_H + BAR_GAP);
 
+      // Track how many bars each day has so we can push the events-strip down
+      for (const dk of keys) barsPerDay.set(dk, (barsPerDay.get(dk) || 0) + 1);
+
       const barStartsThisWeek = keys[0] === startKey;
       const barEndsThisWeek   = evt.endDate <= lastKey;
       const r1 = barStartsThisWeek ? '6px' : '0';
@@ -614,6 +621,14 @@ function renderMultidayBars() {
       }
       overlay.appendChild(bar);
     }
+  }
+
+  // Push each card's events-strip below its bars so pills don't hide under them
+  for (const [dk, count] of barsPerDay) {
+    const card = grid.querySelector(`.day-card[data-date="${dk}"]`);
+    if (!card) continue;
+    const strip = card.querySelector('.events-strip');
+    if (strip) strip.style.paddingTop = `${4 + count * (BAR_H + BAR_GAP)}px`;
   }
 }
 

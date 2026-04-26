@@ -401,9 +401,24 @@ function parseGCalEvent(gcalEvt) {
   const time     = isAllDay ? null : (gcalEvt.start?.dateTime || '').slice(11, 16);
   const popupReminder = gcalEvt.reminders?.overrides?.find(r => r.method === 'popup');
 
+  // Extract endDate for multi-day events so it survives the syncFromGCal Object.assign
+  let endDate = null;
+  if (isAllDay && gcalEvt.end?.date) {
+    // GCal all-day end is exclusive — subtract 1 day for Chronicle's inclusive end
+    const d = new Date(gcalEvt.end.date + 'T00:00');
+    d.setDate(d.getDate() - 1);
+    const candidate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (candidate > (gcalEvt.start?.date || '')) endDate = candidate;
+  } else if (!isAllDay && gcalEvt.end?.dateTime) {
+    const endDay   = gcalEvt.end.dateTime.slice(0, 10);
+    const startDay = (gcalEvt.start?.dateTime || '').slice(0, 10);
+    if (endDay > startDay) endDate = endDay;
+  }
+
   return {
     title:            gcalEvt.summary || '(no title)',
     time,
+    endDate,
     notes:            gcalEvt.description || '',
     reminderMinutes:  popupReminder?.minutes ?? null,
     googleEventId:    gcalEvt.id,
