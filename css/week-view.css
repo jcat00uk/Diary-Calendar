@@ -109,8 +109,11 @@
 }
 
 /* Monday start: Mon–Thu in two 2-col rows, then Fri (left) + weekend stack (right) */
+/* minmax(0,1fr) instead of 1fr: 1fr = minmax(auto,1fr) which still uses item
+   min-content as the column minimum, letting long event titles inflate columns.
+   minmax(0,1fr) hard-sets the minimum to 0, guaranteeing equal columns. */
 .week-grid[data-week-start="mon"] {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: 1fr 1fr 1fr;
   grid-template-areas:
     "mon tue"
@@ -120,7 +123,7 @@
 
 /* Sunday start: half-height Sun strip at top, then 3 weekday rows */
 .week-grid[data-week-start="sun"] {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: 0.5fr 1fr 1fr 1fr;
   grid-template-areas:
     "sun sun"
