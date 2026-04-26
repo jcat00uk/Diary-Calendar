@@ -10,6 +10,7 @@
   flex-direction: column;
   height: 100%;        /* fills its CSS grid row */
   min-height: 0;
+  min-width: 0;        /* prevents grid track inflation from long event titles */
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.15s;

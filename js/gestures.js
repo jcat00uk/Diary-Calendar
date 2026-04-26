@@ -13,21 +13,22 @@ export function initGestures(el, callbacks) {
 
   // ── Touch ───────────────────────────────────────────────────────────────
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('[contenteditable]')) return;
-
     const t     = e.touches[0];
     startX      = t.clientX;
     startY      = t.clientY;
     startTarget = e.target;
     moved       = false;
 
-    const card = startTarget.closest('.day-card');
-    longPressTimer = setTimeout(() => {
-      if (moved) return;
-      if (card?.dataset.date) callbacks.onLongPress?.(card.dataset.date);
-      startTarget = null;
-    }, LONG_PRESS_MS);
-    if (card) card.classList.add('pressing');
+    // Long-press only triggers outside editable areas; swipe still works anywhere
+    if (!e.target.closest('[contenteditable]')) {
+      const card = startTarget.closest('.day-card');
+      longPressTimer = setTimeout(() => {
+        if (moved) return;
+        if (card?.dataset.date) callbacks.onLongPress?.(card.dataset.date);
+        startTarget = null;
+      }, LONG_PRESS_MS);
+      if (card) card.classList.add('pressing');
+    }
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {

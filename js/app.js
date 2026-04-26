@@ -546,7 +546,7 @@ function renderMultidayBars() {
     for (const dk of coveredKeys) {
       const r = cardRects[dk];
       if (!r) continue;
-      const rowKey = Math.round(r.top / 4) * 4;
+      const rowKey = Math.round(r.top / 16) * 16;
       if (!rows.has(rowKey)) rows.set(rowKey, []);
       rows.get(rowKey).push(dk);
     }
