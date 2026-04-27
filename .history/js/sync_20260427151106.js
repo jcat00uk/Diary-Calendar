@@ -5,7 +5,7 @@
 const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata email';
 const CONSENTED_SCOPE_KEY = 'chronicle_consentedScope';
 const GDRIVE_FILE   = 'chronicle-data.json';
-let _clientId       = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
+const CLIENT_ID     = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
 const GCAL_BASE     = 'https://www.googleapis.com/calendar/v3';
 const BG_THROTTLE   = 30_000;
 const isNative      = !!window.Capacitor?.isNativePlatform();
@@ -48,9 +48,8 @@ export function markClean() { _dirtyCallback?.(false); }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export function initGoogleAuth(clientId) {
-  if (clientId) _clientId = clientId;
-  if (!_clientId) return;
+export function initGoogleAuth() {
+  if (!CLIENT_ID) return;
 
   if (isNative) {
     const prevEmail    = localStorage.getItem('chronicle_userEmail');
@@ -65,7 +64,7 @@ export function initGoogleAuth(clientId) {
   if (typeof google === 'undefined' || !google.accounts) return;
 
   _tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: _clientId,
+    client_id: CLIENT_ID,
     scope: GDRIVE_SCOPE,
     callback: async (resp) => {
       if (resp.error) {
@@ -125,12 +124,12 @@ export function initGoogleAuth(clientId) {
 }
 
 export async function signIn() {
-  if (!_clientId) { _statusCallback?.('needs_client_id'); return; }
+  if (!CLIENT_ID) { _statusCallback?.('needs_client_id'); return; }
 
   if (isNative) {
     const { Browser } = await import('@capacitor/browser');
     const params = new URLSearchParams({
-      client_id:     _clientId,
+      client_id:     CLIENT_ID,
       redirect_uri:  'com.jcat.chronicle://oauth/callback',
       response_type: 'token',
       scope:         GDRIVE_SCOPE,
@@ -238,7 +237,7 @@ async function upload(payload) {
 // ── Drive sync engine ─────────────────────────────────────────────────────────
 
 export async function syncNow(data, persist, onConflict, showToast) {
-  if (!_clientId) { showToast?.('Client ID not configured'); return; }
+  if (!CLIENT_ID) { showToast?.('Client ID not configured'); return; }
   if (!gdriveState.token) {
     _pendingAfterAuth = true;
     const hasConsented = localStorage.getItem('chronicle_hasConsented');

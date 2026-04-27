@@ -2966,7 +2966,7 @@ async function init() {
     _conflictCallbacks = null;
   });
 
-  initGoogleAuth();
+  initGoogleAuth(state.data.settings.googleAuth.clientId);
 
   if (window.Capacitor?.isNativePlatform()) {
     const { App: CapApp } = await import('@capacitor/app');
@@ -2994,7 +2994,7 @@ async function init() {
     if (gdriveState.token) {
       _runFullSync();
     } else {
-      syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn);
+      signIn().catch(console.warn);
     }
   });
   document.getElementById('btnAdd').addEventListener('click', () => {
