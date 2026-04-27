@@ -24,7 +24,7 @@ import { initGestures, initSwipe } from './gestures.js';
 import { pushUndo, undo, redo, canUndo, canRedo } from './undo.js';
 import {
   markDirty, markClean,
-  registerDirtyCallback, registerStatusCallback,
+  registerDirtyCallback, registerStatusCallback, registerToastCallback,
   gdriveState, initGoogleAuth, signIn, signOut,
   syncNow, bgSync,
   syncToGCal, fullSync, fetchCalendarList,
@@ -2006,13 +2006,13 @@ function openSettingsDropdown() {
               <div class="settings-label">Google Calendar</div>
               ${gdriveState.userEmail
                 ? `<div class="settings-sublabel">${esc(gdriveState.userEmail)}</div>`
-                : '<div class="settings-sublabel">Not signed in</div>'}
+                : '<div class="settings-sublabel">Sign in above to enable</div>'}
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
               ${gdriveState.userEmail
                 ? `<button class="settings-gdrive-btn" data-gcal-action="sync">Sync</button>
                    <button class="settings-gdrive-btn" data-gcal-action="signout">Sign out</button>`
-                : `<button class="settings-gdrive-btn" data-gcal-action="signin">Sign in</button>`}
+                : ''}
             </div>
           </div>
           <div id="gcalCalendarList"></div>
@@ -2098,7 +2098,7 @@ function openSettingsDropdown() {
   dropdown.querySelector('[data-gdrive-action]')?.addEventListener('click', e => {
     const action = e.currentTarget.dataset.gdriveAction;
     closeSettingsDropdown();
-    if (action === 'signin') signIn();
+    if (action === 'signin') signIn().catch(err => showToast('Sign-in failed: ' + err.message));
     else signOut();
   });
 
@@ -2113,10 +2113,7 @@ function openSettingsDropdown() {
   dropdown.querySelectorAll('[data-gcal-action]').forEach(btn => {
     btn.addEventListener('click', () => {
       const action = btn.dataset.gcalAction;
-      if (action === 'signin') {
-        closeSettingsDropdown();
-        signIn();
-      } else if (action === 'signout') {
+      if (action === 'signout') {
         closeSettingsDropdown();
         signOut();
         state.data.settings.googleAuth.connectedEmail = '';
@@ -2955,6 +2952,8 @@ async function init() {
     }
   });
 
+  registerToastCallback(showToast);
+
   document.getElementById('conflictKeepDrive').addEventListener('click', async () => {
     document.getElementById('conflictModal').classList.remove('open');
     await _conflictCallbacks?.keepDrive();
@@ -2967,17 +2966,6 @@ async function init() {
   });
 
   initGoogleAuth(state.data.settings.googleAuth.clientId);
-
-  if (window.Capacitor?.isNativePlatform()) {
-    const { App: CapApp } = await import('@capacitor/app');
-    CapApp.addListener('appUrlOpen', async (data) => {
-      if (!data.url?.startsWith('com.jcat.chronicle://oauth/callback')) return;
-      const hash   = data.url.split('#')[1] || '';
-      const params = new URLSearchParams(hash);
-      const token  = params.get('access_token');
-      if (token) await handleNativeToken(token);
-    });
-  }
 
   renderWeekGrid();
 

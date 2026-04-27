@@ -1,8 +1,15 @@
 {
   "appId": "com.jcat.chronicle",
   "appName": "Chronicle",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "SocialLogin": {
+      "google": {
+        "webClientId": "683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com"
+      }
+    }
   }
 }

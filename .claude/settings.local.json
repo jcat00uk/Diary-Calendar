@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c \" import sys, json lines = sys.stdin.readlines\\(\\) for line in lines[-20:]: try: obj = json.loads\\(line\\) role = obj.get\\('role',''\\) content = obj.get\\('content',''\\) if isinstance\\(content, list\\): for c in content: if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text': print\\(f'[{role}]: {c[\\\\\"text\\\\\"][:300]}'\\) elif isinstance\\(content, str\\): print\\(f'[{role}]: {content[:300]}'\\) except: pass \")"
+      "Bash(python3 -c \" import sys, json lines = sys.stdin.readlines\\(\\) for line in lines[-20:]: try: obj = json.loads\\(line\\) role = obj.get\\('role',''\\) content = obj.get\\('content',''\\) if isinstance\\(content, list\\): for c in content: if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text': print\\(f'[{role}]: {c[\\\\\"text\\\\\"][:300]}'\\) elif isinstance\\(content, str\\): print\\(f'[{role}]: {content[:300]}'\\) except: pass \")",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Read(//c/Users/**)",
+      "Read(//s/Coding/Chronicle Android/**)",
+      "Bash(cp \"s:/Coding/Diary Calendar/js/sync.js\" \"S:/Coding/Chronicle Android/Chronicle/Chronicle/www/js/sync.js\")",
+      "Bash(cp \"s:/Coding/Diary Calendar/js/app.js\" \"S:/Coding/Chronicle Android/Chronicle/Chronicle/www/js/app.js\")",
+      "Bash(npx cap *)"
     ]
   }
 }

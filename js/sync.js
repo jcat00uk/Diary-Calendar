@@ -2,7 +2,7 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata email';
+const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.appdata email profile';
 const CONSENTED_SCOPE_KEY = 'chronicle_consentedScope';
 const GDRIVE_FILE   = 'chronicle-data.json';
 let _clientId       = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
@@ -18,6 +18,7 @@ let _lastBgSync        = 0;
 let _tokenRefreshTimer = null;
 let _dirtyCallback     = null;
 let _statusCallback    = null;
+let _toastCallback     = null;
 
 // Tracks throttle for fullSync; separate from GDrive bgSync throttle
 let _lastGCalSync    = 0;
@@ -42,6 +43,7 @@ export const gdriveState = {
 
 export function registerDirtyCallback(cb)  { _dirtyCallback  = cb; }
 export function registerStatusCallback(cb) { _statusCallback = cb; }
+export function registerToastCallback(cb)  { _toastCallback  = cb; }
 
 export function markDirty() { _dirtyCallback?.(true); }
 export function markClean() { _dirtyCallback?.(false); }
@@ -127,18 +129,38 @@ export function initGoogleAuth(clientId) {
 export async function signIn() {
   if (!_clientId) { _statusCallback?.('needs_client_id'); return; }
 
+  const isNative = !!(window.Capacitor &&
+                      window.Capacitor.isNativePlatform &&
+                      window.Capacitor.isNativePlatform());
+
   if (isNative) {
-    const { Browser } = await import('@capacitor/browser');
-    const params = new URLSearchParams({
-      client_id:     _clientId,
-      redirect_uri:  'com.jcat.chronicle://oauth/callback',
-      response_type: 'token',
-      scope:         GDRIVE_SCOPE,
-    });
-    await Browser.open({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() });
+    try {
+      const SocialLogin = window.Capacitor.Plugins.SocialLogin;
+      await SocialLogin.initialize({ google: { webClientId: _clientId } });
+      _toastCallback?.('Opening Google Sign-In…');
+      const result = await SocialLogin.login({
+        provider: 'google',
+        options: {
+          scopes: [
+            'https://www.googleapis.com/auth/drive.appdata',
+            'https://www.googleapis.com/auth/calendar',
+            'email',
+            'profile',
+          ],
+        },
+      });
+      const token = result?.result?.accessToken?.token;
+      if (!token) throw new Error('No access token returned');
+      await handleNativeToken(token, 3600);
+      _toastCallback?.('Signed in successfully');
+    } catch (err) {
+      console.error('[Chronicle signIn native]', err);
+      _toastCallback?.('Sign-in failed: ' + err.message);
+    }
     return;
   }
 
+  // Web flow — GIS popup
   if (!_tokenClient) initGoogleAuth();
   if (!_tokenClient) return;
   _tokenClient.requestAccessToken({ prompt: '' });
@@ -157,9 +179,9 @@ export function signOut() {
   _statusCallback?.('unsigned', null);
 }
 
-export async function handleNativeToken(accessToken) {
+export async function handleNativeToken(accessToken, expiresIn = 3600) {
   gdriveState.token          = accessToken;
-  gdriveState.tokenExpiresAt = Date.now() + 3600 * 1000;
+  gdriveState.tokenExpiresAt = Date.now() + expiresIn * 1000;
 
   const saved = localStorage.getItem('chronicle_userEmail');
   try {
@@ -182,6 +204,7 @@ export async function handleNativeToken(accessToken) {
     _statusCallback?.('pending_sync');
   }
 }
+
 
 window._onGISLoad = function () { initGoogleAuth(); };
 
