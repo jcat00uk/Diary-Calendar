@@ -475,7 +475,13 @@ function buildGCalEvent(evt, dateKey, tz) {
 
 function parseGCalEvent(gcalEvt) {
   const isAllDay = !!gcalEvt.start?.date;
-  const time     = isAllDay ? null : (gcalEvt.start?.dateTime || '').slice(11, 16);
+  // Use new Date() so getHours()/getMinutes() return local time regardless of
+  // whether Google returned a UTC "Z" string or an offset string like "+01:00"
+  let time = null;
+  if (!isAllDay && gcalEvt.start?.dateTime) {
+    const dt = new Date(gcalEvt.start.dateTime);
+    time = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+  }
   const popupReminder = gcalEvt.reminders?.overrides?.find(r => r.method === 'popup');
 
   // Extract endDate for multi-day events so it survives the syncFromGCal Object.assign
@@ -487,8 +493,9 @@ function parseGCalEvent(gcalEvt) {
     const candidate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     if (candidate > (gcalEvt.start?.date || '')) endDate = candidate;
   } else if (!isAllDay && gcalEvt.end?.dateTime) {
-    const endDay   = gcalEvt.end.dateTime.slice(0, 10);
-    const startDay = (gcalEvt.start?.dateTime || '').slice(0, 10);
+    // Use _fmtDate(new Date()) so midnight-crossing events get the correct local date
+    const endDay   = _fmtDate(new Date(gcalEvt.end.dateTime));
+    const startDay = _fmtDate(new Date(gcalEvt.start?.dateTime || 0));
     if (endDay > startDay) endDate = endDay;
   }
 
@@ -507,7 +514,7 @@ function parseGCalEvent(gcalEvt) {
 
 function gcalEventDateKey(gcalEvt) {
   if (gcalEvt.start?.date)     return gcalEvt.start.date;
-  if (gcalEvt.start?.dateTime) return gcalEvt.start.dateTime.slice(0, 10);
+  if (gcalEvt.start?.dateTime) return _fmtDate(new Date(gcalEvt.start.dateTime));
   return null;
 }
 
