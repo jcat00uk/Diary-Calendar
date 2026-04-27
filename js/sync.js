@@ -382,6 +382,13 @@ async function ensureChronicleCalendar(data) {
 const _fmtDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+// Build a local datetime string one hour after dateStr+timeStr, no UTC conversion
+function _localPlusOneHour(dateStr, timeStr) {
+  const d = new Date(`${dateStr}T${timeStr}:00`);
+  d.setHours(d.getHours() + 1);
+  return `${_fmtDate(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
+}
+
 const _GCAL_DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
 
 function _buildRRule(repeat) {
@@ -404,10 +411,8 @@ function buildGCalRecurringEvent(series, tz) {
   const [y, m, d] = series.startDate.split('-').map(Number);
   let start, end;
   if (series.time) {
-    const [h, min] = series.time.split(':').map(Number);
-    const startDate = new Date(y, m - 1, d, h, min);
-    start = { dateTime: startDate.toISOString(), timeZone: tz };
-    end   = { dateTime: new Date(startDate.getTime() + 3_600_000).toISOString(), timeZone: tz };
+    start = { dateTime: `${series.startDate}T${series.time}:00`, timeZone: tz };
+    end   = { dateTime: _localPlusOneHour(series.startDate, series.time), timeZone: tz };
   } else {
     start = { date: series.startDate };
     end   = { date: _fmtDate(new Date(y, m - 1, d + 1)) };
@@ -437,14 +442,11 @@ function buildGCalEvent(evt, dateKey, tz) {
 
   let start, end;
   if (evt.time) {
-    const [h, min] = evt.time.split(':').map(Number);
-    const startDate = new Date(y, m - 1, d, h, min);
-    start = { dateTime: startDate.toISOString(), timeZone: tz };
+    start = { dateTime: `${dateKey}T${evt.time}:00`, timeZone: tz };
     if (evt.endTime) {
-      const [eh, em] = evt.endTime.split(':').map(Number);
-      end = { dateTime: new Date(y, m - 1, d, eh, em).toISOString(), timeZone: tz };
+      end = { dateTime: `${dateKey}T${evt.endTime}:00`, timeZone: tz };
     } else {
-      end = { dateTime: new Date(startDate.getTime() + 3_600_000).toISOString(), timeZone: tz };
+      end = { dateTime: _localPlusOneHour(dateKey, evt.time), timeZone: tz };
     }
   } else {
     start = { date: dateKey };

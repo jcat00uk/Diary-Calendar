@@ -2,9 +2,20 @@
 
 import { generateOccurrencesForSeries } from './events.js';
 
-let _timers = [];
+const _isNative = !!(window.Capacitor &&
+                     window.Capacitor.isNativePlatform &&
+                     window.Capacitor.isNativePlatform());
+
+let _timers    = [];   // web setTimeout handles
+let _nativeIds = [];   // native notification IDs for cancellation
 
 export async function requestNotificationPermission() {
+  if (_isNative) {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if (!LN) return 'unsupported';
+    const { display } = await LN.requestPermissions();
+    return display === 'granted' ? 'granted' : 'denied';
+  }
   if (!('Notification' in window)) return 'unsupported';
   if (Notification.permission !== 'default') return Notification.permission;
   return Notification.requestPermission();
@@ -13,6 +24,11 @@ export async function requestNotificationPermission() {
 export function scheduleReminders(data) {
   _timers.forEach(id => clearTimeout(id));
   _timers = [];
+
+  if (_isNative) {
+    _scheduleNative(data);
+    return;
+  }
 
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
@@ -38,11 +54,75 @@ export function scheduleReminders(data) {
   }
 }
 
+async function _scheduleNative(data) {
+  const LN = window.Capacitor?.Plugins?.LocalNotifications;
+  if (!LN) return;
+
+  if (_nativeIds.length) {
+    await LN.cancel({ notifications: _nativeIds.map(id => ({ id })) });
+    _nativeIds = [];
+  }
+
+  const { display } = await LN.checkPermissions();
+  if (display !== 'granted') return;
+  if (!data.settings.notifications) return;
+
+  const now    = Date.now();
+  const cutoff = now + 24 * 60 * 60 * 1000;
+  const notifications = [];
+
+  for (const [dateKey, day] of Object.entries(data.days || {})) {
+    for (const evt of (day.events || [])) {
+      if (evt.reminderMinutes == null || !evt.time) continue;
+      const fireAt = _fireTime(dateKey, evt.time, evt.reminderMinutes);
+      if (fireAt <= now || fireAt > cutoff) continue;
+      const id = Math.floor(Math.random() * 2_000_000_000);
+      _nativeIds.push(id);
+      notifications.push({
+        title:        evt.title,
+        body:         evt.time + (evt.notes ? ' — ' + evt.notes : ''),
+        id,
+        schedule:     { at: new Date(fireAt) },
+        sound:        undefined,
+        attachments:  undefined,
+        actionTypeId: '',
+        extra:        null,
+      });
+    }
+  }
+
+  for (const dateKey of _datesInWindow(now, cutoff)) {
+    for (const series of (data.series || [])) {
+      if (series.reminderMinutes == null || !series.time) continue;
+      const occ = generateOccurrencesForSeries(series, dateKey);
+      if (!occ) continue;
+      const fireAt = _fireTime(dateKey, series.time, series.reminderMinutes);
+      if (fireAt <= now || fireAt > cutoff) continue;
+      const id = Math.floor(Math.random() * 2_000_000_000);
+      _nativeIds.push(id);
+      notifications.push({
+        title:        series.title,
+        body:         series.time + (series.notes ? ' — ' + series.notes : ''),
+        id,
+        schedule:     { at: new Date(fireAt) },
+        sound:        undefined,
+        attachments:  undefined,
+        actionTypeId: '',
+        extra:        null,
+      });
+    }
+  }
+
+  if (notifications.length) {
+    await LN.schedule({ notifications });
+  }
+}
+
 function _maybeSchedule(title, dateKey, timeStr, reminderMinutes, notes, now, cutoff) {
   const fireAt = _fireTime(dateKey, timeStr, reminderMinutes);
   if (fireAt <= now || fireAt > cutoff) return;
   const id = setTimeout(() => {
-    new Notification(title, { body: timeStr + (notes ? ' \u2014 ' + notes : '') });
+    new Notification(title, { body: timeStr + (notes ? ' — ' + notes : '') });
   }, fireAt - now);
   _timers.push(id);
 }
