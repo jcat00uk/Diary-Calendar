@@ -1,0 +1,8 @@
+{
+  "appId": "com.jcat.chronicle",
+  "appName": "Chronicle",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  }
+}

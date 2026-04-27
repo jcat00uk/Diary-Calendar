@@ -8,6 +8,7 @@ const GDRIVE_FILE   = 'chronicle-data.json';
 const CLIENT_ID     = '683163650924-66qma24l7eiaum03bpr6281u5pq0uo0n.apps.googleusercontent.com';
 const GCAL_BASE     = 'https://www.googleapis.com/calendar/v3';
 const BG_THROTTLE   = 30_000;
+const isNative      = !!window.Capacitor?.isNativePlatform();
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
@@ -49,6 +50,17 @@ export function markClean() { _dirtyCallback?.(false); }
 
 export function initGoogleAuth() {
   if (!CLIENT_ID) return;
+
+  if (isNative) {
+    const prevEmail    = localStorage.getItem('chronicle_userEmail');
+    const hasConsented = localStorage.getItem('chronicle_hasConsented');
+    if (prevEmail && hasConsented) {
+      gdriveState.userEmail = prevEmail;
+      _statusCallback?.('signed', prevEmail);
+    }
+    return;
+  }
+
   if (typeof google === 'undefined' || !google.accounts) return;
 
   _tokenClient = google.accounts.oauth2.initTokenClient({
@@ -111,15 +123,28 @@ export function initGoogleAuth() {
   }
 }
 
-export function signIn() {
+export async function signIn() {
   if (!CLIENT_ID) { _statusCallback?.('needs_client_id'); return; }
+
+  if (isNative) {
+    const { Browser } = await import('@capacitor/browser');
+    const params = new URLSearchParams({
+      client_id:     CLIENT_ID,
+      redirect_uri:  'com.jcat.chronicle://oauth/callback',
+      response_type: 'token',
+      scope:         GDRIVE_SCOPE,
+    });
+    await Browser.open({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() });
+    return;
+  }
+
   if (!_tokenClient) initGoogleAuth();
   if (!_tokenClient) return;
   _tokenClient.requestAccessToken({ prompt: '' });
 }
 
 export function signOut() {
-  if (gdriveState.token) google.accounts.oauth2.revoke(gdriveState.token, () => {});
+  if (gdriveState.token && !isNative) google.accounts.oauth2.revoke(gdriveState.token, () => {});
   clearTimeout(_tokenRefreshTimer);
   gdriveState.token          = null;
   gdriveState.tokenExpiresAt = 0;
@@ -129,6 +154,32 @@ export function signOut() {
   localStorage.removeItem('chronicle_hasConsented');
   localStorage.removeItem(CONSENTED_SCOPE_KEY);
   _statusCallback?.('unsigned', null);
+}
+
+export async function handleNativeToken(accessToken) {
+  gdriveState.token          = accessToken;
+  gdriveState.tokenExpiresAt = Date.now() + 3600 * 1000;
+
+  const saved = localStorage.getItem('chronicle_userEmail');
+  try {
+    const info  = await fetch(
+      'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + accessToken
+    ).then(r => r.json());
+    const email = info.email || saved || 'Signed in';
+    localStorage.setItem('chronicle_userEmail',    email);
+    localStorage.setItem('chronicle_hasConsented', '1');
+    localStorage.setItem(CONSENTED_SCOPE_KEY,      GDRIVE_SCOPE);
+    gdriveState.userEmail = email;
+  } catch {
+    gdriveState.userEmail = saved || 'Signed in';
+  }
+
+  _statusCallback?.('signed', gdriveState.userEmail);
+
+  if (_pendingAfterAuth) {
+    _pendingAfterAuth = false;
+    _statusCallback?.('pending_sync');
+  }
 }
 
 window._onGISLoad = function () { initGoogleAuth(); };

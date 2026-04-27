@@ -28,7 +28,7 @@ import {
   gdriveState, initGoogleAuth, signIn, signOut,
   syncNow, bgSync,
   syncToGCal, fullSync, fetchCalendarList,
-  resetGCalThrottle,
+  resetGCalThrottle, handleNativeToken,
 } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
@@ -2967,6 +2967,17 @@ async function init() {
   });
 
   initGoogleAuth();
+
+  if (window.Capacitor?.isNativePlatform()) {
+    const { App: CapApp } = await import('@capacitor/app');
+    CapApp.addListener('appUrlOpen', async (data) => {
+      if (!data.url?.startsWith('com.jcat.chronicle://oauth/callback')) return;
+      const hash   = data.url.split('#')[1] || '';
+      const params = new URLSearchParams(hash);
+      const token  = params.get('access_token');
+      if (token) await handleNativeToken(token);
+    });
+  }
 
   renderWeekGrid();
 
