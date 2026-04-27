@@ -355,9 +355,17 @@ function _getReadOnlyEventsForDate(dateKey) {
   for (const cal of calendars) {
     for (const gcalEvt of (state.data.readOnlyEvents?.[cal.id] || [])) {
       if (gcalEvt.status === 'cancelled') continue;
-      const evtDate = gcalEvt.start?.date || gcalEvt.start?.dateTime?.slice(0, 10);
+      let evtDate = gcalEvt.start?.date || null;
+      if (!evtDate && gcalEvt.start?.dateTime) {
+        const d = new Date(gcalEvt.start.dateTime);
+        evtDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
       if (evtDate !== dateKey) continue;
-      const time = gcalEvt.start?.dateTime ? gcalEvt.start.dateTime.slice(11, 16) : null;
+      let time = null;
+      if (gcalEvt.start?.dateTime) {
+        const d = new Date(gcalEvt.start.dateTime);
+        time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
       result.push({
         _readOnly:   true,
         _calColour:  cal.colour || '#4285f4',
