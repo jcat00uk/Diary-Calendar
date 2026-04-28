@@ -8,7 +8,11 @@ export const SWIPE_HINT_PX  = 22;
 const HINT_PX        = SWIPE_HINT_PX;
 export const SPRING_EASE = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-export function initGestures(el, callbacks) {
+export function initGestures(el, callbacks, options = {}) {
+  const { commitThresholdH, commitThresholdV } = options;
+  const getThH = () => typeof commitThresholdH === 'function' ? commitThresholdH() : (commitThresholdH ?? SWIPE_MIN_PX);
+  const getThV = () => typeof commitThresholdV === 'function' ? commitThresholdV() : (commitThresholdV ?? SWIPE_MIN_PX);
+
   const parent = el.parentElement; // translated element (gridWithSides)
   let startX = 0, startY = 0;
   let startTarget = null;
@@ -62,15 +66,17 @@ export function initGestures(el, callbacks) {
     }
 
     if (moved && swipeAxis) {
-      if (!dragStartFired && swipeAxis === 'h') {
+      if (!dragStartFired) {
         dragStartFired = true;
-        callbacks.onDragStart?.();
+        if (swipeAxis === 'h') callbacks.onDragStart?.();
+        else                   callbacks.onDragStartV?.();
       }
       if (swipeAxis === 'h') {
         parent.style.transform = `translateX(${dx}px)`;
         callbacks.onDragTranslate?.(dx);
       } else {
         parent.style.transform = `translateY(${dy}px)`;
+        callbacks.onDragTranslateV?.(dy);
       }
     }
 
@@ -95,30 +101,35 @@ export function initGestures(el, callbacks) {
       const dy  = t.clientY - startY;
       const adx = Math.abs(dx);
       const ady = Math.abs(dy);
+      const thH = getThH();
+      const thV = getThV();
 
       let committed = false;
-      if (adx >= SWIPE_MIN_PX && adx > ady * SWIPE_RATIO) {
+      if (adx >= thH && adx > ady * SWIPE_RATIO) {
         committed = true;
         parent.style.transform = '';
         callbacks.onDragEnd?.();
         if (dx < 0) callbacks.onSwipeLeft?.();
         else        callbacks.onSwipeRight?.();
-      } else if (ady >= SWIPE_MIN_PX && ady > adx * SWIPE_RATIO) {
+      } else if (ady >= thV && ady > adx * SWIPE_RATIO) {
         committed = true;
         parent.style.transform = '';
-        callbacks.onDragEnd?.();
+        callbacks.onDragEndV?.();
         if (dy < 0) callbacks.onSwipeUp?.();
         else        callbacks.onSwipeDown?.();
       }
 
       if (!committed) {
-        const DUR = 350;
+        const DUR  = 350;
+        const axis = swipeAxis; // capture before timeout
         parent.style.transition = `transform ${DUR}ms ${SPRING_EASE}`;
         parent.style.transform  = '';
-        callbacks.onDragSnapBack?.(DUR);
+        if (axis === 'h') callbacks.onDragSnapBack?.(DUR);
+        else              callbacks.onDragSnapBackV?.(DUR);
         setTimeout(() => {
           parent.style.transition = '';
-          callbacks.onDragEnd?.();
+          if (axis === 'h') callbacks.onDragEnd?.();
+          else              callbacks.onDragEndV?.();
         }, DUR + 20);
       }
     } else {
@@ -134,13 +145,16 @@ export function initGestures(el, callbacks) {
     callbacks.onHint?.(null);
     hintFired = false;
     if (moved && swipeAxis) {
-      const DUR = 250;
+      const DUR  = 250;
+      const axis = swipeAxis;
       parent.style.transition = `transform ${DUR}ms ease`;
       parent.style.transform  = '';
-      callbacks.onDragSnapBack?.(DUR);
+      if (axis === 'h') callbacks.onDragSnapBack?.(DUR);
+      else              callbacks.onDragSnapBackV?.(DUR);
       setTimeout(() => {
         parent.style.transition = '';
-        callbacks.onDragEnd?.();
+        if (axis === 'h') callbacks.onDragEnd?.();
+        else              callbacks.onDragEndV?.();
       }, DUR + 20);
     } else {
       parent.style.transform = '';

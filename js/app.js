@@ -868,17 +868,6 @@ function _buildExpandedGhost(forDate, side) {
   const dateKey = formatDate(forDate);
   const title   = forDate.toLocaleDateString('default', { weekday: 'long', day: 'numeric', month: 'long' });
   const holiday = getHolidayForDate(state.data, dateKey);
-  const evts    = getEventsForDate(state.data, dateKey, { includeContinuations: false })
-    .filter(e => e.syncStatus !== 'deleted');
-  const eventsHTML = evts.slice(0, 5).map(e =>
-    `<div class="expanded-event-item">
-       <div class="expanded-event-dot expanded-event-dot--${e.type === 'todo' ? 'todo' : 'event'}"></div>
-       <div class="expanded-event-content">
-         <div class="expanded-event-title${e.done ? ' done' : ''}">${esc(e.title)}</div>
-         ${e.time ? `<div class="expanded-event-time">${esc(e.time)}</div>` : ''}
-       </div>
-     </div>`
-  ).join('') || `<div class="expanded-empty" style="padding:10px 0">No events</div>`;
 
   const ghost = document.createElement('div');
   ghost.style.cssText = [
@@ -894,18 +883,12 @@ function _buildExpandedGhost(forDate, side) {
       <div class="expanded-title">${esc(title)}</div>
       <div></div>
     </header>
-    ${holiday ? `<div class="expanded-holiday-label">${esc(holiday)}</div>` : ''}
-    <div class="expanded-body" style="flex:1;overflow:hidden;">
-      <div class="expanded-section">
-        <div class="expanded-section-header">${STRINGS.eventSection}</div>
-        <div class="expanded-event-list">${eventsHTML}</div>
-      </div>
-    </div>`;
+    ${holiday ? `<div class="expanded-holiday-label">${esc(holiday)}</div>` : ''}`;
   document.body.appendChild(ghost);
   return ghost;
 }
 
-function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false } = {}) {
+function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false, _slideFrom = 'right' } = {}) {
   if (_expandedOverlay) closeExpandedDay();
 
   if (replaceHistory) {
@@ -997,7 +980,7 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
 
   renderExpandedEvents(overlay, dateKey);
 
-  const navigateExpandedDay = (targetDate) => {
+  const navigateExpandedDay = (targetDate, slideFrom = 'right') => {
     const targetKey = formatDate(targetDate);
     goToWeek(targetDate);
     if (_expandedOverlay) {
@@ -1005,13 +988,13 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
       _expandedOverlay = null;
       _expandedDateKey  = null;
     }
-    openExpandedDay(targetKey, { replaceHistory: true });
+    openExpandedDay(targetKey, { replaceHistory: true, _slideFrom: slideFrom });
   };
 
   // Back button → history.back() → popstate → closeExpandedDay()
   overlay.querySelector('.expanded-back').addEventListener('click', () => history.back());
-  overlay.querySelector('.expanded-side-nav--left').addEventListener('click', () => navigateExpandedDay(prevDate));
-  overlay.querySelector('.expanded-side-nav--right').addEventListener('click', () => navigateExpandedDay(nextDate));
+  overlay.querySelector('.expanded-side-nav--left').addEventListener('click', () => navigateExpandedDay(prevDate, 'left'));
+  overlay.querySelector('.expanded-side-nav--right').addEventListener('click', () => navigateExpandedDay(nextDate, 'right'));
 
   overlay.querySelector('.expanded-add-btn').addEventListener('click', () => {
     history.back();
@@ -1032,7 +1015,7 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     if (e.target.closest('.expanded-side-nav'))  return;
     _expStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     _expAxis  = null;
-    overlay.style.transition = '';
+    overlay.style.transition = 'none'; // suppress CSS transition during drag
   }, { passive: true });
 
   overlay.addEventListener('touchmove', e => {
@@ -1065,7 +1048,7 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     if (_expAxis !== 'h') { _cleanupExpGhosts(); _expStart = null; _expAxis = null; return; }
     _expStart = null; _expAxis = null;
 
-    if (Math.abs(dx) >= SWIPE_MIN_PX) {
+    if (Math.abs(dx) >= window.innerWidth * 0.5) {
       const DUR = 250;
       const tr  = `transform ${DUR}ms ease`;
       overlay.style.transition              = tr;
@@ -1130,8 +1113,12 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     _expStart = null; _expAxis = null;
   }, { passive: true });
 
+  if (_slideFrom === 'left') overlay.classList.add('slide-from-left');
+
   if (_skipSlideIn) {
+    overlay.style.transition = 'none';
     overlay.classList.add('open');
+    requestAnimationFrame(() => { overlay.style.transition = ''; });
   } else {
     requestAnimationFrame(() => overlay.classList.add('open'));
   }
@@ -3201,6 +3188,7 @@ async function init() {
   document.body.appendChild(_swipeHintEl);
 
   let _prevWeekGhost = null, _nextWeekGhost = null;
+  let _prevMonthGhost = null, _nextMonthGhost = null;
 
   function _buildWeekGhost(direction) {
     const weekStart = navigateWeek(state.currentWeekStart, direction);
@@ -3213,6 +3201,62 @@ async function init() {
       'position:fixed',
       `top:${rect.top}px`,
       `left:${rect.left + direction * rect.width}px`,
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      'background:var(--bg-primary)',
+      'z-index:1',
+      'display:flex',
+      'align-items:stretch',
+      'overflow:hidden',
+      'pointer-events:none',
+    ].join(';');
+
+    const grid = document.createElement('div');
+    grid.className = 'week-grid';
+    grid.dataset.weekStart = ws;
+
+    days.forEach(date => {
+      const dow  = date.getDay();
+      const card = document.createElement('div');
+      card.className = 'day-card';
+      if (isSameDay(date, state.today))    card.classList.add('today');
+      if (dow === 0 || dow === 6)           card.classList.add('day-card--weekend');
+      card.dataset.day = getDayAreaName(date);
+      card.innerHTML = `<div class="day-header">
+        <span class="day-name">${getDayName(date)}</span>
+        <span class="day-number">${date.getDate()}<span class="day-month-abbr"> ${date.toLocaleString('default',{month:'short'})}</span></span>
+      </div>`;
+      grid.appendChild(card);
+    });
+
+    if (ws === 'mon') {
+      const sat = grid.querySelector('.day-card[data-day="sat"]');
+      const sun = grid.querySelector('.day-card[data-day="sun"]');
+      if (sat && sun) {
+        const col = document.createElement('div');
+        col.className = 'weekend-col';
+        grid.insertBefore(col, sat);
+        col.appendChild(sat);
+        col.appendChild(sun);
+      }
+    }
+
+    wrapper.appendChild(grid);
+    document.body.appendChild(wrapper);
+    return wrapper;
+  }
+
+  function _buildMonthGhost(direction) {
+    const weekStart = navigateMonth(state.currentWeekStart, direction, state.data.settings.weekStart);
+    const days      = getDaysOfWeek(weekStart);
+    const ws        = state.data.settings.weekStart;
+    const rect      = gridWithSides.getBoundingClientRect();
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = [
+      'position:fixed',
+      `top:${rect.top + direction * rect.height}px`,
+      `left:${rect.left}px`,
       `width:${rect.width}px`,
       `height:${rect.height}px`,
       'background:var(--bg-primary)',
@@ -3284,6 +3328,28 @@ async function init() {
       _prevWeekGhost?.remove(); _prevWeekGhost = null;
       _nextWeekGhost?.remove(); _nextWeekGhost = null;
     },
+    onDragStartV: () => {
+      _prevMonthGhost = _buildMonthGhost(-1);
+      _nextMonthGhost = _buildMonthGhost(+1);
+    },
+    onDragTranslateV: dy => {
+      if (_prevMonthGhost) _prevMonthGhost.style.transform = `translateY(${dy}px)`;
+      if (_nextMonthGhost) _nextMonthGhost.style.transform = `translateY(${dy}px)`;
+    },
+    onDragSnapBackV: dur => {
+      [_prevMonthGhost, _nextMonthGhost].forEach(g => {
+        if (!g) return;
+        g.style.transition = `transform ${dur}ms ${SPRING_EASE}`;
+        g.style.transform  = '';
+      });
+    },
+    onDragEndV: () => {
+      _prevMonthGhost?.remove(); _prevMonthGhost = null;
+      _nextMonthGhost?.remove(); _nextMonthGhost = null;
+    },
+  }, {
+    commitThresholdH: () => window.innerWidth  * 0.5,
+    commitThresholdV: () => window.innerHeight * 0.5,
   });
 
   // ── Delegated: todo checkbox toggle ──
