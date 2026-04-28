@@ -20,7 +20,7 @@ import {
   createRepeatRule,
 } from './events.js'
 import { getDiaryText, initDiaryArea, initFormatToolbar } from './diary.js';
-import { initGestures, initSwipe } from './gestures.js';
+import { initGestures, SPRING_EASE, SWIPE_HINT_PX, SWIPE_MIN_PX } from './gestures.js';
 import { pushUndo, undo, redo, canUndo, canRedo } from './undo.js';
 import {
   markDirty, markClean,
@@ -643,6 +643,9 @@ function renderMultidayBars() {
 function renderWeekGrid() {
   const grid = document.getElementById('weekGrid');
   if (!grid) return;
+  const gws = grid.parentElement; // .grid-with-sides
+  gws.style.transform  = '';
+  gws.style.transition = '';
   grid.style.transform  = '';
   grid.style.transition = '';
   grid.innerHTML = '';
@@ -861,7 +864,48 @@ function anyModalOpen() {
 let _expandedOverlay = null;
 let _expandedDateKey  = null;
 
-function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
+function _buildExpandedGhost(forDate, side) {
+  const dateKey = formatDate(forDate);
+  const title   = forDate.toLocaleDateString('default', { weekday: 'long', day: 'numeric', month: 'long' });
+  const holiday = getHolidayForDate(state.data, dateKey);
+  const evts    = getEventsForDate(state.data, dateKey, { includeContinuations: false })
+    .filter(e => e.syncStatus !== 'deleted');
+  const eventsHTML = evts.slice(0, 5).map(e =>
+    `<div class="expanded-event-item">
+       <div class="expanded-event-dot expanded-event-dot--${e.type === 'todo' ? 'todo' : 'event'}"></div>
+       <div class="expanded-event-content">
+         <div class="expanded-event-title${e.done ? ' done' : ''}">${esc(e.title)}</div>
+         ${e.time ? `<div class="expanded-event-time">${esc(e.time)}</div>` : ''}
+       </div>
+     </div>`
+  ).join('') || `<div class="expanded-empty" style="padding:10px 0">No events</div>`;
+
+  const ghost = document.createElement('div');
+  ghost.style.cssText = [
+    'position:fixed', 'top:0', 'bottom:0', 'left:50%', 'width:100%', 'max-width:480px',
+    'z-index:199', 'display:flex', 'flex-direction:column', 'background:var(--bg-primary)',
+    `transform:translateX(${side === 'prev' ? '-150%' : '50%'})`,
+    'padding-top:var(--safe-top)', 'padding-bottom:var(--safe-bottom)',
+    'pointer-events:none', 'overflow:hidden',
+  ].join(';');
+  ghost.innerHTML = `
+    <header class="expanded-header">
+      <div class="expanded-back"></div>
+      <div class="expanded-title">${esc(title)}</div>
+      <div></div>
+    </header>
+    ${holiday ? `<div class="expanded-holiday-label">${esc(holiday)}</div>` : ''}
+    <div class="expanded-body" style="flex:1;overflow:hidden;">
+      <div class="expanded-section">
+        <div class="expanded-section-header">${STRINGS.eventSection}</div>
+        <div class="expanded-event-list">${eventsHTML}</div>
+      </div>
+    </div>`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false } = {}) {
   if (_expandedOverlay) closeExpandedDay();
 
   if (replaceHistory) {
@@ -969,19 +1013,128 @@ function openExpandedDay(dateKey, { replaceHistory = false } = {}) {
   overlay.querySelector('.expanded-side-nav--left').addEventListener('click', () => navigateExpandedDay(prevDate));
   overlay.querySelector('.expanded-side-nav--right').addEventListener('click', () => navigateExpandedDay(nextDate));
 
-  // Swipe left/right = prev/next day
-  initSwipe(overlay, {
-    onSwipeLeft:  () => navigateExpandedDay(nextDate),
-    onSwipeRight: () => navigateExpandedDay(prevDate),
-    onHint:       dir => _showSwipeHint(dir, 'expanded'),
-  });
   overlay.querySelector('.expanded-add-btn').addEventListener('click', () => {
     history.back();
     setTimeout(() => openAddEventModal(dateKey), 350);
   });
 
+  // ── Swipe navigation with adjacent-day preview ────────────────────────
+  let _expStart = null, _expAxis = null;
+  let _ghostPrev = null, _ghostNext = null;
 
-  requestAnimationFrame(() => overlay.classList.add('open'));
+  function _cleanupExpGhosts() {
+    _ghostPrev?.remove(); _ghostPrev = null;
+    _ghostNext?.remove(); _ghostNext = null;
+  }
+
+  overlay.addEventListener('touchstart', e => {
+    if (e.target.closest('[contenteditable]')) return;
+    if (e.target.closest('.expanded-side-nav'))  return;
+    _expStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    _expAxis  = null;
+    overlay.style.transition = '';
+  }, { passive: true });
+
+  overlay.addEventListener('touchmove', e => {
+    if (!_expStart) return;
+    const dx  = e.touches[0].clientX - _expStart.x;
+    const dy  = e.touches[0].clientY - _expStart.y;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+
+    if (!_expAxis) {
+      if (adx >= SWIPE_HINT_PX && adx > ady) {
+        _expAxis = 'h';
+        if (!_ghostPrev) _ghostPrev = _buildExpandedGhost(prevDate, 'prev');
+        if (!_ghostNext) _ghostNext = _buildExpandedGhost(nextDate, 'next');
+      } else if (ady >= SWIPE_HINT_PX && ady > adx) {
+        _expStart = null; // vertical scroll — cancel swipe
+        return;
+      }
+    }
+    if (_expAxis !== 'h') return;
+
+    overlay.style.transform = `translateX(calc(-50% + ${dx}px))`;
+    if (_ghostPrev) _ghostPrev.style.transform = `translateX(calc(-150% + ${dx}px))`;
+    if (_ghostNext) _ghostNext.style.transform = `translateX(calc(50% + ${dx}px))`;
+    if (adx >= SWIPE_HINT_PX) _showSwipeHint(dx < 0 ? 'left' : 'right', 'expanded');
+  }, { passive: true });
+
+  const _handleExpEnd = dx => {
+    _showSwipeHint(null, 'expanded');
+    if (_expAxis !== 'h') { _cleanupExpGhosts(); _expStart = null; _expAxis = null; return; }
+    _expStart = null; _expAxis = null;
+
+    if (Math.abs(dx) >= SWIPE_MIN_PX) {
+      const DUR = 250;
+      const tr  = `transform ${DUR}ms ease`;
+      overlay.style.transition              = tr;
+      if (_ghostPrev) _ghostPrev.style.transition = tr;
+      if (_ghostNext) _ghostNext.style.transition = tr;
+
+      const targetDate = dx < 0 ? nextDate : prevDate;
+      if (dx < 0) {
+        overlay.style.transform              = 'translateX(-150%)';
+        if (_ghostNext) _ghostNext.style.transform = 'translateX(-50%)';
+        if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-250%)';
+      } else {
+        overlay.style.transform              = 'translateX(50%)';
+        if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-50%)';
+        if (_ghostNext) _ghostNext.style.transform = 'translateX(150%)';
+      }
+      setTimeout(() => {
+        _cleanupExpGhosts();
+        overlay.style.transition = '';
+        overlay.style.transform  = '';
+        overlay.remove();
+        _expandedOverlay = null;
+        _expandedDateKey = null;
+        goToWeek(targetDate);
+        openExpandedDay(formatDate(targetDate), { replaceHistory: true, _skipSlideIn: true });
+      }, DUR + 10);
+    } else {
+      const DUR = 350;
+      const tr  = `transform ${DUR}ms ${SPRING_EASE}`;
+      overlay.style.transition              = tr;
+      if (_ghostPrev) _ghostPrev.style.transition = tr;
+      if (_ghostNext) _ghostNext.style.transition = tr;
+      overlay.style.transform              = 'translateX(-50%)';
+      if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-150%)';
+      if (_ghostNext) _ghostNext.style.transform = 'translateX(50%)';
+      setTimeout(() => {
+        _cleanupExpGhosts();
+        overlay.style.transform  = '';
+        overlay.style.transition = '';
+      }, DUR + 20);
+    }
+  };
+
+  overlay.addEventListener('touchend', e => {
+    if (!_expStart) return;
+    _handleExpEnd(e.changedTouches[0].clientX - _expStart.x);
+  }, { passive: true });
+
+  overlay.addEventListener('touchcancel', () => {
+    _showSwipeHint(null, 'expanded');
+    if (_expAxis === 'h') {
+      const DUR = 250;
+      const tr  = `transform ${DUR}ms ease`;
+      overlay.style.transition              = tr;
+      if (_ghostPrev) _ghostPrev.style.transition = tr;
+      if (_ghostNext) _ghostNext.style.transition = tr;
+      overlay.style.transform              = 'translateX(-50%)';
+      if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-150%)';
+      if (_ghostNext) _ghostNext.style.transform = 'translateX(50%)';
+      setTimeout(() => { _cleanupExpGhosts(); overlay.style.transform = ''; overlay.style.transition = ''; }, DUR + 20);
+    }
+    _expStart = null; _expAxis = null;
+  }, { passive: true });
+
+  if (_skipSlideIn) {
+    overlay.classList.add('open');
+  } else {
+    requestAnimationFrame(() => overlay.classList.add('open'));
+  }
 }
 
 function renderExpandedEvents(overlay, dateKey) {
@@ -3047,6 +3200,64 @@ async function init() {
   _swipeHintEl.className = 'swipe-hint';
   document.body.appendChild(_swipeHintEl);
 
+  let _prevWeekGhost = null, _nextWeekGhost = null;
+
+  function _buildWeekGhost(direction) {
+    const weekStart = navigateWeek(state.currentWeekStart, direction);
+    const days      = getDaysOfWeek(weekStart);
+    const ws        = state.data.settings.weekStart;
+    const rect      = gridWithSides.getBoundingClientRect();
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = [
+      'position:fixed',
+      `top:${rect.top}px`,
+      `left:${rect.left + direction * rect.width}px`,
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      'background:var(--bg-primary)',
+      'z-index:1',
+      'display:flex',
+      'align-items:stretch',
+      'overflow:hidden',
+      'pointer-events:none',
+    ].join(';');
+
+    const grid = document.createElement('div');
+    grid.className = 'week-grid';
+    grid.dataset.weekStart = ws;
+
+    days.forEach(date => {
+      const dow  = date.getDay();
+      const card = document.createElement('div');
+      card.className = 'day-card';
+      if (isSameDay(date, state.today))    card.classList.add('today');
+      if (dow === 0 || dow === 6)           card.classList.add('day-card--weekend');
+      card.dataset.day = getDayAreaName(date);
+      card.innerHTML = `<div class="day-header">
+        <span class="day-name">${getDayName(date)}</span>
+        <span class="day-number">${date.getDate()}<span class="day-month-abbr"> ${date.toLocaleString('default',{month:'short'})}</span></span>
+      </div>`;
+      grid.appendChild(card);
+    });
+
+    if (ws === 'mon') {
+      const sat = grid.querySelector('.day-card[data-day="sat"]');
+      const sun = grid.querySelector('.day-card[data-day="sun"]');
+      if (sat && sun) {
+        const col = document.createElement('div');
+        col.className = 'weekend-col';
+        grid.insertBefore(col, sat);
+        col.appendChild(sat);
+        col.appendChild(sun);
+      }
+    }
+
+    wrapper.appendChild(grid);
+    document.body.appendChild(wrapper);
+    return wrapper;
+  }
+
   initGestures(weekGrid, {
     onLongPress:  dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
     onSwipeLeft:  () => nextWeek(),
@@ -3054,6 +3265,25 @@ async function init() {
     onSwipeUp:    () => nextMonth(),
     onSwipeDown:  () => prevMonth(),
     onHint:       dir => _showSwipeHint(dir, 'week'),
+    onDragStart:  () => {
+      _prevWeekGhost = _buildWeekGhost(-1);
+      _nextWeekGhost = _buildWeekGhost(+1);
+    },
+    onDragTranslate: dx => {
+      if (_prevWeekGhost) _prevWeekGhost.style.transform = `translateX(${dx}px)`;
+      if (_nextWeekGhost) _nextWeekGhost.style.transform = `translateX(${dx}px)`;
+    },
+    onDragSnapBack: dur => {
+      [_prevWeekGhost, _nextWeekGhost].forEach(g => {
+        if (!g) return;
+        g.style.transition = `transform ${dur}ms ${SPRING_EASE}`;
+        g.style.transform  = '';
+      });
+    },
+    onDragEnd: () => {
+      _prevWeekGhost?.remove(); _prevWeekGhost = null;
+      _nextWeekGhost?.remove(); _nextWeekGhost = null;
+    },
   });
 
   // ── Delegated: todo checkbox toggle ──

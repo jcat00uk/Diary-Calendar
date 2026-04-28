@@ -742,6 +742,35 @@ export async function syncToGCal(data) {
     }
   }
 
+  // ── Deleted recurring occurrences (exceptions where value = null) ─────────
+  for (const series of (data.series || [])) {
+    if (!series.googleEventId || !series.exceptions) continue;
+    const calId = series.googleCalendarId || chronicleCalId;
+    for (const [dateKey, exc] of Object.entries(series.exceptions)) {
+      if (exc !== null) continue; // only null = deleted occurrence
+      const [y, m, d] = dateKey.split('-').map(Number);
+      const dayStart = new Date(y, m - 1, d, 0, 0, 0).toISOString();
+      const dayEnd   = new Date(y, m - 1, d, 23, 59, 59).toISOString();
+      try {
+        const resp = await gcalRequest(
+          `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/` +
+          `${encodeURIComponent(series.googleEventId)}/instances` +
+          `?timeMin=${encodeURIComponent(dayStart)}&timeMax=${encodeURIComponent(dayEnd)}&maxResults=1`
+        );
+        if (!resp.ok) continue;
+        const { items } = await resp.json();
+        const inst = items?.[0];
+        if (!inst || inst.status === 'cancelled') continue; // already cancelled
+        await gcalRequest(
+          `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(inst.id)}`,
+          { method: 'DELETE' }
+        );
+      } catch (err) {
+        console.warn('[Chronicle GCal] occurrence delete failed:', series.googleEventId, dateKey, err.message);
+      }
+    }
+  }
+
   // ── Deleted series ────────────────────────────────────────────────────────
   const deletedSeries = data.deletedSeriesGCalIds || [];
   for (const { googleEventId, googleCalendarId } of deletedSeries) {
@@ -787,8 +816,9 @@ export async function syncFromGCal(data) {
     if (series.googleEventId) seriesByGCalId[series.googleEventId] = series;
   }
 
-  // Collect recurring parent IDs from instances we encounter
-  const recurringParentIds = new Set();
+  // Collect recurring parent IDs — split by whether they have any active instances
+  const allParentIds    = new Set(); // every parent ID seen (active + cancelled instances)
+  const activeParentIds = new Set(); // parents with at least one non-cancelled instance
 
   for (const gcalEvt of items) {
     if (gcalEvt.status === 'cancelled') {
@@ -799,15 +829,25 @@ export async function syncFromGCal(data) {
           local.evt.syncStatus = 'deleted';
         }
       } else {
-        // Track cancelled instance's parent for series handling
-        recurringParentIds.add(gcalEvt.recurringEventId);
+        allParentIds.add(gcalEvt.recurringEventId);
+        // Propagate single cancelled occurrence to local series exceptions
+        const knownSeries = seriesByGCalId[gcalEvt.recurringEventId];
+        if (knownSeries) {
+          const instDate = gcalEvt.originalStartTime?.date
+            || (gcalEvt.originalStartTime?.dateTime ? _fmtDate(new Date(gcalEvt.originalStartTime.dateTime)) : null);
+          if (instDate && knownSeries.exceptions?.[instDate] === undefined) {
+            if (!knownSeries.exceptions) knownSeries.exceptions = {};
+            knownSeries.exceptions[instDate] = null; // mark as deleted occurrence
+          }
+        }
       }
       continue;
     }
 
     // Skip individual recurring event instances — import only the parent series
     if (gcalEvt.recurringEventId) {
-      recurringParentIds.add(gcalEvt.recurringEventId);
+      allParentIds.add(gcalEvt.recurringEventId);
+      activeParentIds.add(gcalEvt.recurringEventId);
       continue;
     }
 
@@ -837,16 +877,29 @@ export async function syncFromGCal(data) {
   }
 
   // Import recurring event parents as Chronicle series
-  for (const parentId of recurringParentIds) {
-    if (seriesByGCalId[parentId]) continue; // Already a known series
+  for (const parentId of allParentIds) {
+    const knownSeries = seriesByGCalId[parentId];
+    // Skip known series that still have active instances — nothing to do
+    if (knownSeries && activeParentIds.has(parentId)) continue;
 
     try {
       const resp = await gcalRequest(
         `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(parentId)}`
       );
-      if (!resp.ok) continue;
+      if (!resp.ok) {
+        // Parent not found — delete local series if we have one
+        if (knownSeries) data.series = data.series.filter(s => s.googleEventId !== parentId);
+        continue;
+      }
       const parentEvt = await resp.json();
-      if (parentEvt.status === 'cancelled') continue;
+      if (parentEvt.status === 'cancelled') {
+        // Parent deleted in GCal — remove local series if we have one
+        if (knownSeries) data.series = data.series.filter(s => s.googleEventId !== parentId);
+        continue;
+      }
+
+      // Known series is confirmed still active — nothing more to do
+      if (knownSeries) continue;
 
       const repeat = _parseRRule(parentEvt.recurrence);
       if (!repeat) continue;

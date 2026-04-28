@@ -2,16 +2,21 @@
 
 const LONG_PRESS_MS  = 480;
 const MOVE_CANCEL_PX = 12;
-const SWIPE_MIN_PX   = 50;
-const SWIPE_RATIO    = 1.8; // primary axis must be this many times larger than secondary
-const HINT_PX        = 22;  // displacement to show swipe direction hint
+export const SWIPE_MIN_PX   = 50;
+const SWIPE_RATIO    = 1.8;
+export const SWIPE_HINT_PX  = 22;
+const HINT_PX        = SWIPE_HINT_PX;
+export const SPRING_EASE = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
 export function initGestures(el, callbacks) {
+  const parent = el.parentElement; // translated element (gridWithSides)
   let startX = 0, startY = 0;
   let startTarget = null;
   let moved = false;
   let longPressTimer = null;
   let hintFired = false;
+  let swipeAxis = null;
+  let dragStartFired = false;
 
   // ── Touch ───────────────────────────────────────────────────────────────
   el.addEventListener('touchstart', e => {
@@ -19,11 +24,12 @@ export function initGestures(el, callbacks) {
     startX      = t.clientX;
     startY      = t.clientY;
     startTarget = e.target;
-    moved       = false;
-    hintFired   = false;
-    el.style.transition = ''; // cancel any in-progress snap-back
+    moved          = false;
+    hintFired      = false;
+    swipeAxis      = null;
+    dragStartFired = false;
+    parent.style.transition = '';
 
-    // Long-press only triggers outside editable areas; swipe still works anywhere
     if (!e.target.closest('[contenteditable]')) {
       const card = startTarget.closest('.day-card');
       longPressTimer = setTimeout(() => {
@@ -49,20 +55,31 @@ export function initGestures(el, callbacks) {
       el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     }
 
-    if (moved) {
-      // Translate the grid in real-time so the user sees their finger drag the content
-      if (adx >= ady) {
-        el.style.transform = `translateX(${dx}px)`;
+    // Commit to an axis once HINT_PX is exceeded — no translation before that
+    if (moved && !swipeAxis) {
+      if (adx >= HINT_PX && adx > ady) swipeAxis = 'h';
+      else if (ady >= HINT_PX && ady > adx) swipeAxis = 'v';
+    }
+
+    if (moved && swipeAxis) {
+      if (!dragStartFired && swipeAxis === 'h') {
+        dragStartFired = true;
+        callbacks.onDragStart?.();
+      }
+      if (swipeAxis === 'h') {
+        parent.style.transform = `translateX(${dx}px)`;
+        callbacks.onDragTranslate?.(dx);
       } else {
-        el.style.transform = `translateY(${dy}px)`;
+        parent.style.transform = `translateY(${dy}px)`;
       }
     }
 
-    if (moved && !hintFired) {
-      let dir = null;
-      if (adx >= HINT_PX && adx > ady) dir = dx < 0 ? 'left' : 'right';
-      else if (ady >= HINT_PX && ady > adx) dir = dy < 0 ? 'up' : 'down';
-      if (dir) { hintFired = true; callbacks.onHint?.(dir); }
+    if (moved && !hintFired && swipeAxis) {
+      hintFired = true;
+      const dir = swipeAxis === 'h'
+        ? (dx < 0 ? 'left' : 'right')
+        : (dy < 0 ? 'up' : 'down');
+      callbacks.onHint?.(dir);
     }
   }, { passive: true });
 
@@ -79,29 +96,33 @@ export function initGestures(el, callbacks) {
       const adx = Math.abs(dx);
       const ady = Math.abs(dy);
 
-      // Final finger position decides the action — if user has swiped back
-      // toward origin, neither threshold is met and the grid snaps back.
       let committed = false;
       if (adx >= SWIPE_MIN_PX && adx > ady * SWIPE_RATIO) {
         committed = true;
-        el.style.transform = ''; // clear before re-render
+        parent.style.transform = '';
+        callbacks.onDragEnd?.();
         if (dx < 0) callbacks.onSwipeLeft?.();
         else        callbacks.onSwipeRight?.();
       } else if (ady >= SWIPE_MIN_PX && ady > adx * SWIPE_RATIO) {
         committed = true;
-        el.style.transform = ''; // clear before re-render
+        parent.style.transform = '';
+        callbacks.onDragEnd?.();
         if (dy < 0) callbacks.onSwipeUp?.();
         else        callbacks.onSwipeDown?.();
       }
 
       if (!committed) {
-        // Animate snap-back to origin
-        el.style.transition = 'transform 0.25s ease';
-        el.style.transform  = '';
-        setTimeout(() => { el.style.transition = ''; }, 260);
+        const DUR = 350;
+        parent.style.transition = `transform ${DUR}ms ${SPRING_EASE}`;
+        parent.style.transform  = '';
+        callbacks.onDragSnapBack?.(DUR);
+        setTimeout(() => {
+          parent.style.transition = '';
+          callbacks.onDragEnd?.();
+        }, DUR + 20);
       }
     } else {
-      el.style.transform = '';
+      parent.style.transform = '';
     }
 
     startTarget = null;
@@ -112,10 +133,17 @@ export function initGestures(el, callbacks) {
     el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     callbacks.onHint?.(null);
     hintFired = false;
-    if (moved) {
-      el.style.transition = 'transform 0.25s ease';
-      el.style.transform  = '';
-      setTimeout(() => { el.style.transition = ''; }, 260);
+    if (moved && swipeAxis) {
+      const DUR = 250;
+      parent.style.transition = `transform ${DUR}ms ease`;
+      parent.style.transform  = '';
+      callbacks.onDragSnapBack?.(DUR);
+      setTimeout(() => {
+        parent.style.transition = '';
+        callbacks.onDragEnd?.();
+      }, DUR + 20);
+    } else {
+      parent.style.transform = '';
     }
     startTarget = null;
   }, { passive: true });
@@ -125,8 +153,8 @@ export function initGestures(el, callbacks) {
     if (e.button !== 0) return;
     if (e.target.closest('[contenteditable]')) return;
 
-    const ox = e.clientX;
-    const oy = e.clientY;
+    const ox     = e.clientX;
+    const oy     = e.clientY;
     const target = e.target;
     let mouseTimer = null;
 
@@ -136,7 +164,7 @@ export function initGestures(el, callbacks) {
         cancel();
       }
     };
-    const onUp  = () => cancel();
+    const onUp   = () => cancel();
     const cancel = () => {
       clearTimeout(mouseTimer);
       if (card) card.classList.remove('pressing');
@@ -156,7 +184,9 @@ export function initGestures(el, callbacks) {
   });
 }
 
-/** Lightweight swipe-only detector for overlays (expanded day, modals).
+/** Lightweight swipe-only detector for overlays and panels.
+ *  Horizontal axis only — vertical movement cancels the gesture.
+ *  No translation occurs until the horizontal axis is committed.
  *  options.shouldIgnoreTarget(target) — return true to suppress gesture start. */
 export function initSwipe(el, callbacks, options = {}) {
   const { shouldIgnoreTarget } = options;
@@ -164,12 +194,12 @@ export function initSwipe(el, callbacks, options = {}) {
 
   el.addEventListener('touchstart', e => {
     if (shouldIgnoreTarget?.(e.target)) { active = false; return; }
-    startX     = e.touches[0].clientX;
-    startY     = e.touches[0].clientY;
-    active     = true;
-    hintFired  = false;
-    swipeAxis  = null;
-    el.style.transition = ''; // cancel any in-progress snap-back
+    startX    = e.touches[0].clientX;
+    startY    = e.touches[0].clientY;
+    active    = true;
+    hintFired = false;
+    swipeAxis = null;
+    el.style.transition = '';
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
@@ -179,24 +209,17 @@ export function initSwipe(el, callbacks, options = {}) {
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
 
-    // Lock to the dominant axis once we know it
     if (!swipeAxis) {
-      if (adx >= HINT_PX && adx > ady) swipeAxis = 'h';
-      else if (ady >= HINT_PX && ady > adx) swipeAxis = 'v';
+      if (adx >= HINT_PX && adx > ady)      swipeAxis = 'h';
+      else if (ady >= HINT_PX && ady > adx) { active = false; return; } // vertical → cancel
     }
+    if (swipeAxis !== 'h') return;
 
-    // Translate the overlay in real-time so the user sees the drag
-    if (swipeAxis === 'h') el.style.transform = `translateX(${dx}px)`;
-    else if (swipeAxis === 'v') el.style.transform = `translateY(${dy}px)`;
+    el.style.transform = `translateX(${dx}px)`;
 
-    if (!hintFired) {
-      if (adx >= HINT_PX && adx > ady) {
-        hintFired = true;
-        callbacks.onHint?.(dx < 0 ? 'left' : 'right');
-      } else if (ady >= HINT_PX && ady > adx) {
-        hintFired = true;
-        callbacks.onHint?.(dy < 0 ? 'up' : 'down');
-      }
+    if (!hintFired && adx >= HINT_PX) {
+      hintFired = true;
+      callbacks.onHint?.(dx < 0 ? 'left' : 'right');
     }
   }, { passive: true });
 
@@ -205,31 +228,29 @@ export function initSwipe(el, callbacks, options = {}) {
     active    = false;
     hintFired = false;
     callbacks.onHint?.(null);
+
+    if (swipeAxis !== 'h') {
+      el.style.transform = '';
+      swipeAxis = null;
+      return;
+    }
+
     const dx  = e.changedTouches[0].clientX - startX;
     const dy  = e.changedTouches[0].clientY - startY;
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
+    swipeAxis = null;
 
-    // Final position decides — swiping back before release cancels the action
-    let committed = false;
     if (adx >= SWIPE_MIN_PX && adx > ady * SWIPE_RATIO) {
-      committed = true;
-      el.style.transform = ''; // clear before navigation replaces the overlay
+      el.style.transform = '';
       if (dx < 0) callbacks.onSwipeLeft?.();
       else        callbacks.onSwipeRight?.();
-    } else if (ady >= SWIPE_MIN_PX && ady > adx * SWIPE_RATIO) {
-      committed = true;
-      el.style.transform = '';
-      if (dy < 0) callbacks.onSwipeUp?.();
-      else        callbacks.onSwipeDown?.();
+      return;
     }
 
-    if (!committed) {
-      el.style.transition = 'transform 0.25s ease';
-      el.style.transform  = '';
-      setTimeout(() => { el.style.transition = ''; }, 260);
-    }
-    swipeAxis = null;
+    el.style.transition = `transform 350ms ${SPRING_EASE}`;
+    el.style.transform  = '';
+    setTimeout(() => { el.style.transition = ''; }, 370);
   }, { passive: true });
 
   el.addEventListener('touchcancel', () => {
@@ -238,7 +259,7 @@ export function initSwipe(el, callbacks, options = {}) {
     hintFired = false;
     swipeAxis = null;
     callbacks.onHint?.(null);
-    el.style.transition = 'transform 0.25s ease';
+    el.style.transition = 'transform 250ms ease';
     el.style.transform  = '';
     setTimeout(() => { el.style.transition = ''; }, 260);
   }, { passive: true });
