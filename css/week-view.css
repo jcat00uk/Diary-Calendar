@@ -227,3 +227,34 @@
   opacity: 1;
 }
 
+/* ── Swipe zone glow — top/bottom nav strips ──────────────── */
+
+.nav-arrow--top.swipe-zone-active,
+.nav-arrow--bottom.swipe-zone-active {
+  background: rgba(55,138,221,0.10);
+  box-shadow: inset 0 0 14px rgba(55,138,221,0.22);
+  transition: none;
+}
+
+/* ── Center vertical swipe zone (month nav) ───────────────── */
+
+.swipe-zone-center {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  background: rgba(55,138,221,0.13);
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 2px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.swipe-zone-center.swipe-zone-active {
+  background: rgba(55,138,221,0.38);
+  box-shadow: 0 0 10px rgba(55,138,221,0.40);
+  transition: none;
+}
+

@@ -9,7 +9,7 @@ const HINT_PX        = SWIPE_HINT_PX;
 export const SPRING_EASE = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
 export function initGestures(el, callbacks, options = {}) {
-  const { commitThresholdH, commitThresholdV } = options;
+  const { commitThresholdH, commitThresholdV, zoneCheck } = options;
   const getThH = () => typeof commitThresholdH === 'function' ? commitThresholdH() : (commitThresholdH ?? SWIPE_MIN_PX);
   const getThV = () => typeof commitThresholdV === 'function' ? commitThresholdV() : (commitThresholdV ?? SWIPE_MIN_PX);
 
@@ -21,6 +21,7 @@ export function initGestures(el, callbacks, options = {}) {
   let hintFired = false;
   let swipeAxis = null;
   let dragStartFired = false;
+  let zoneBlocked = false;
 
   // ── Touch ───────────────────────────────────────────────────────────────
   el.addEventListener('touchstart', e => {
@@ -32,6 +33,7 @@ export function initGestures(el, callbacks, options = {}) {
     hintFired      = false;
     swipeAxis      = null;
     dragStartFired = false;
+    zoneBlocked    = false;
     parent.style.transition = '';
 
     if (!e.target.closest('[contenteditable]')) {
@@ -60,9 +62,14 @@ export function initGestures(el, callbacks, options = {}) {
     }
 
     // Commit to an axis once HINT_PX is exceeded — no translation before that
-    if (moved && !swipeAxis) {
-      if (adx >= HINT_PX && adx > ady) swipeAxis = 'h';
-      else if (ady >= HINT_PX && ady > adx) swipeAxis = 'v';
+    if (moved && !swipeAxis && !zoneBlocked) {
+      if (adx >= HINT_PX && adx > ady) {
+        if (!zoneCheck || zoneCheck('h', startX, startY)) swipeAxis = 'h';
+        else zoneBlocked = true;
+      } else if (ady >= HINT_PX && ady > adx) {
+        if (!zoneCheck || zoneCheck('v', startX, startY)) swipeAxis = 'v';
+        else zoneBlocked = true;
+      }
     }
 
     if (moved && swipeAxis) {

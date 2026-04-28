@@ -240,30 +240,3 @@ For the expanded day view, the threshold is separately in app.js inside _handleE
 
 if (Math.abs(dx) >= window.innerWidth * 0.5) {
 Same idea — change 0.5 there to adjust the day-swipe trigger independently.
-
-
-1. I’m building a mobile calendar UI and running into gesture‑conflict issues. Editable text areas (notes, diary entries, event descriptions) need vertical scrolling, but the page also supports swipe navigation for changing days, weeks, and months. On Android WebView, these gestures interfere with each other — scrolling inside a text field often triggers navigation.
-
-Please propose a solution using dedicated swipe areas, based on this layout: I've included images of how it might be achieved
-
-The top and bottom edges of the screen act as swipe zones for left/right navigation (e.g., change week or month).
-
-A central vertical strip acts as the swipe zone for up/down navigation (e.g., change day).
-
-Swipes should only trigger navigation when the gesture begins inside these zones.
-
-Interactions inside editable text areas must never trigger navigation.
-
-Each swipe zone should provide subtle but clear visual feedback, such as a soft glow, when touched.
-
-The glow should make the purpose of the zone obvious without being visually intrusive.
-
-The goal is to eliminate gesture conflicts while keeping navigation intuitive and mobile‑friendly.
-
-2. in weekly view text entered doesn't stay between the lines, 
-3. the number and bullet points are hidden to far to the left off screen, 
-4. in expanded view , the swipe area is still only at the top of the page(see proposed fix), 
-5. the text doesn't stay between the lines,
-6.  numbers and bulletpoints are obscured by the left hand button. 
-7. when typing the text is blocked by the keyboard, the page should scroll so text isn't obscured, 
-can you discuss my solution to the swipe issues, do u have any qs

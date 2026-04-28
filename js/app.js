@@ -925,6 +925,10 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
       <button class="expanded-add-btn" aria-label="${STRINGS.addEvent}">+ ${STRINGS.addEvent}</button>
     </header>
     ${expandedHoliday ? `<div class="expanded-holiday-label">${esc(expandedHoliday)}</div>` : ''}
+    <div class="expanded-nav-strip expanded-nav-strip--top" aria-hidden="true">
+      <svg class="icon"><use href="assets/icons.svg#icon-chevron-left"/></svg>
+      <svg class="icon"><use href="assets/icons.svg#icon-chevron-right"/></svg>
+    </div>
     <div class="expanded-with-sides">
       <div class="expanded-side-nav expanded-side-nav--left" role="button" tabindex="0" aria-label="Previous day: ${esc(prevLabel)}">
         <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-left"/></svg>
@@ -947,6 +951,10 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
         <span class="rotated-text">${esc(nextLabel)}</span>
         <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>
+    </div>
+    <div class="expanded-nav-strip expanded-nav-strip--bottom" aria-hidden="true">
+      <svg class="icon"><use href="assets/icons.svg#icon-chevron-left"/></svg>
+      <svg class="icon"><use href="assets/icons.svg#icon-chevron-right"/></svg>
     </div>
   `;
 
@@ -1012,40 +1020,6 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     _ghostNext?.remove(); _ghostNext = null;
   }
 
-  overlay.addEventListener('touchstart', e => {
-    if (e.target.closest('[contenteditable]')) return;
-    if (e.target.closest('.expanded-side-nav'))  return;
-    _expStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    _expAxis  = null;
-    overlay.style.transition = 'none';
-  }, { passive: false });
-
-  overlay.addEventListener('touchmove', e => {
-    if (!_expStart) return;
-    const dx  = e.touches[0].clientX - _expStart.x;
-    const dy  = e.touches[0].clientY - _expStart.y;
-    const adx = Math.abs(dx);
-    const ady = Math.abs(dy);
-
-    if (!_expAxis) {
-      if (adx >= SWIPE_HINT_PX && adx > ady) {
-        _expAxis = 'h';
-        if (!_ghostPrev) _ghostPrev = _buildExpandedGhost(prevDate, 'prev');
-        if (!_ghostNext) _ghostNext = _buildExpandedGhost(nextDate, 'next');
-      } else if (ady >= SWIPE_HINT_PX && ady > adx) {
-        _expStart = null; // vertical scroll — cancel swipe
-        return;
-      }
-    }
-    if (_expAxis !== 'h') return;
-
-    e.preventDefault(); // prevent native scroll once horizontal axis is committed
-    overlay.style.transform = `translateX(calc(-50% + ${dx}px))`;
-    if (_ghostPrev) _ghostPrev.style.transform = `translateX(calc(-150% + ${dx}px))`;
-    if (_ghostNext) _ghostNext.style.transform = `translateX(calc(50% + ${dx}px))`;
-    if (adx >= SWIPE_HINT_PX) _showSwipeHint(dx < 0 ? 'left' : 'right', 'expanded');
-  }, { passive: false });
-
   const _handleExpEnd = dx => {
     _showSwipeHint(null, 'expanded');
     if (_expAxis !== 'h') { _cleanupExpGhosts(); _expStart = null; _expAxis = null; return; }
@@ -1104,26 +1078,67 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     }
   };
 
-  overlay.addEventListener('touchend', e => {
-    if (!_expStart) return;
-    _handleExpEnd(e.changedTouches[0].clientX - _expStart.x);
-  }, { passive: true });
+  // Attach swipe detection only to the top and bottom nav strips (zone-based)
+  ['.expanded-nav-strip--top', '.expanded-nav-strip--bottom'].forEach(sel => {
+    const zone = overlay.querySelector(sel);
 
-  overlay.addEventListener('touchcancel', () => {
-    _showSwipeHint(null, 'expanded');
-    if (_expAxis === 'h') {
-      const DUR = 250;
-      const tr  = `transform ${DUR}ms ease`;
-      overlay.style.transition              = tr;
-      if (_ghostPrev) _ghostPrev.style.transition = tr;
-      if (_ghostNext) _ghostNext.style.transition = tr;
-      overlay.style.transform              = 'translateX(-50%)';
-      if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-150%)';
-      if (_ghostNext) _ghostNext.style.transform = 'translateX(50%)';
-      setTimeout(() => { _cleanupExpGhosts(); overlay.style.transform = ''; overlay.style.transition = ''; }, DUR + 20);
-    }
-    _expStart = null; _expAxis = null;
-  }, { passive: true });
+    zone.addEventListener('touchstart', e => {
+      _expStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      _expAxis  = null;
+      overlay.style.transition = 'none';
+      zone.classList.add('swipe-zone-active');
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', e => {
+      if (!_expStart) return;
+      const dx  = e.touches[0].clientX - _expStart.x;
+      const dy  = e.touches[0].clientY - _expStart.y;
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (!_expAxis) {
+        if (adx >= SWIPE_HINT_PX && adx > ady) {
+          _expAxis = 'h';
+          if (!_ghostPrev) _ghostPrev = _buildExpandedGhost(prevDate, 'prev');
+          if (!_ghostNext) _ghostNext = _buildExpandedGhost(nextDate, 'next');
+        } else if (ady >= SWIPE_HINT_PX && ady > adx) {
+          _expStart = null; // vertical scroll — cancel swipe
+          zone.classList.remove('swipe-zone-active');
+          return;
+        }
+      }
+      if (_expAxis !== 'h') return;
+
+      e.preventDefault();
+      overlay.style.transform = `translateX(calc(-50% + ${dx}px))`;
+      if (_ghostPrev) _ghostPrev.style.transform = `translateX(calc(-150% + ${dx}px))`;
+      if (_ghostNext) _ghostNext.style.transform = `translateX(calc(50% + ${dx}px))`;
+      if (adx >= SWIPE_HINT_PX) _showSwipeHint(dx < 0 ? 'left' : 'right', 'expanded');
+    }, { passive: false });
+
+    zone.addEventListener('touchend', e => {
+      zone.classList.remove('swipe-zone-active');
+      if (!_expStart) return;
+      _handleExpEnd(e.changedTouches[0].clientX - _expStart.x);
+    }, { passive: true });
+
+    zone.addEventListener('touchcancel', () => {
+      zone.classList.remove('swipe-zone-active');
+      _showSwipeHint(null, 'expanded');
+      if (_expAxis === 'h') {
+        const DUR = 250;
+        const tr  = `transform ${DUR}ms ease`;
+        overlay.style.transition              = tr;
+        if (_ghostPrev) _ghostPrev.style.transition = tr;
+        if (_ghostNext) _ghostNext.style.transition = tr;
+        overlay.style.transform              = 'translateX(-50%)';
+        if (_ghostPrev) _ghostPrev.style.transform = 'translateX(-150%)';
+        if (_ghostNext) _ghostNext.style.transform = 'translateX(50%)';
+        setTimeout(() => { _cleanupExpGhosts(); overlay.style.transform = ''; overlay.style.transition = ''; }, DUR + 20);
+      }
+      _expStart = null; _expAxis = null;
+    }, { passive: true });
+  });
 
   if (_slideFrom === 'left') overlay.classList.add('slide-from-left');
 
@@ -3202,6 +3217,31 @@ async function init() {
   _navDimEl.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;z-index:2;pointer-events:none';
   document.body.appendChild(_navDimEl);
 
+  // Center vertical swipe-zone indicator (month navigation, visual only)
+  const centerStripEl = document.createElement('div');
+  centerStripEl.className = 'swipe-zone-center';
+  gridWithSides.appendChild(centerStripEl);
+
+  // ── Swipe zone glow handlers ──────────────────────────────────
+  const navTopEl = document.getElementById('navPrevWeek');
+  const navBotEl = document.getElementById('navNextWeek');
+
+  [navTopEl, navBotEl].forEach(el => {
+    el.addEventListener('touchstart', () => el.classList.add('swipe-zone-active'),    { passive: true });
+    el.addEventListener('touchend',   () => el.classList.remove('swipe-zone-active'), { passive: true });
+    el.addEventListener('touchcancel',() => el.classList.remove('swipe-zone-active'), { passive: true });
+  });
+
+  weekGrid.addEventListener('touchstart', e => {
+    const x = e.touches[0].clientX;
+    const r = weekGrid.getBoundingClientRect();
+    if (Math.abs(x - (r.left + r.width / 2)) <= 30) {
+      centerStripEl.classList.add('swipe-zone-active');
+    }
+  }, { passive: true });
+  weekGrid.addEventListener('touchend',    () => centerStripEl.classList.remove('swipe-zone-active'), { passive: true });
+  weekGrid.addEventListener('touchcancel', () => centerStripEl.classList.remove('swipe-zone-active'), { passive: true });
+
   let _prevWeekGhost = null, _nextWeekGhost = null;
   let _prevMonthGhost = null, _nextMonthGhost = null;
 
@@ -3392,6 +3432,16 @@ async function init() {
   }, {
     commitThresholdH: () => window.innerWidth  * 0.5,
     commitThresholdV: () => window.innerHeight * 0.5,
+    zoneCheck(axis, sx, sy) {
+      if (axis === 'h') {
+        const tr = navTopEl.getBoundingClientRect();
+        const br = navBotEl.getBoundingClientRect();
+        return (sy >= tr.top && sy <= tr.bottom) || (sy >= br.top && sy <= br.bottom);
+      } else {
+        const gr = weekGrid.getBoundingClientRect();
+        return Math.abs(sx - (gr.left + gr.width / 2)) <= 30;
+      }
+    },
   });
 
   // ── Delegated: todo checkbox toggle ──
@@ -3610,6 +3660,7 @@ async function init() {
 
   // ── visualViewport — keyboard offset for format toolbar, modals, and bottom sheets ──
   if (window.visualViewport) {
+    let _vvScrollTimer = null;
     const onVVResize = () => {
       const offset = Math.max(0, window.innerHeight - window.visualViewport.height);
       document.documentElement.style.setProperty('--keyboard-offset', `${offset}px`);
@@ -3618,6 +3669,27 @@ async function init() {
           ? `${window.visualViewport.height}px`
           : '';
       });
+      // Scroll cursor into view when keyboard appears
+      if (offset > 0) {
+        clearTimeout(_vvScrollTimer);
+        _vvScrollTimer = setTimeout(() => {
+          const active = document.activeElement;
+          if (!active || !active.isContentEditable) return;
+          const sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return;
+          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          const vvH  = window.visualViewport.height;
+          if (rect.bottom > vvH - 10) {
+            let sc = active;
+            while (sc && sc !== document.body) {
+              const s = getComputedStyle(sc);
+              if (s.overflowY === 'auto' || s.overflowY === 'scroll') break;
+              sc = sc.parentElement;
+            }
+            if (sc && sc !== document.body) sc.scrollTop += rect.bottom - vvH + 30;
+          }
+        }, 150);
+      }
     };
     window.visualViewport.addEventListener('resize', onVVResize);
     window.visualViewport.addEventListener('scroll', onVVResize);

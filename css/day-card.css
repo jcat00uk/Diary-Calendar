@@ -298,6 +298,25 @@
   pointer-events: none;
 }
 
+/* ── Diary content alignment — keep text on ruled lines ───── */
+
+/* Restore list indentation zeroed by the * reset, keep markers visible */
+.diary-area ul,
+.diary-area ol {
+  padding-inline-start: 20px;
+  margin: 0;
+}
+
+/* Ensure every block element uses the exact diary line-height so
+   text never drifts off the ruled background */
+.diary-area p,
+.diary-area div,
+.diary-area li,
+.diary-area blockquote {
+  line-height: var(--line-height-diary);
+  margin: 0;
+}
+
 /* ── Format toolbar — fixed bottom ribbon, shows on diary focus ─ */
 
 .format-toolbar {
