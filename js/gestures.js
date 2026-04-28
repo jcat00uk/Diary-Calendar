@@ -107,16 +107,32 @@ export function initGestures(el, callbacks, options = {}) {
       let committed = false;
       if (adx >= thH && adx > ady * SWIPE_RATIO) {
         committed = true;
-        parent.style.transform = '';
-        callbacks.onDragEnd?.();
-        if (dx < 0) callbacks.onSwipeLeft?.();
-        else        callbacks.onSwipeRight?.();
+        const DUR  = 220;
+        const sign = dx < 0 ? -1 : 1;
+        parent.style.transition = `transform ${DUR}ms ease`;
+        parent.style.transform  = `translateX(${sign * -window.innerWidth}px)`;
+        callbacks.onDragCommit?.('h', dx < 0 ? 'left' : 'right', DUR);
+        setTimeout(() => {
+          parent.style.transition = '';
+          parent.style.transform  = '';
+          callbacks.onDragEnd?.();
+          if (dx < 0) callbacks.onSwipeLeft?.();
+          else        callbacks.onSwipeRight?.();
+        }, DUR);
       } else if (ady >= thV && ady > adx * SWIPE_RATIO) {
         committed = true;
-        parent.style.transform = '';
-        callbacks.onDragEndV?.();
-        if (dy < 0) callbacks.onSwipeUp?.();
-        else        callbacks.onSwipeDown?.();
+        const DUR  = 220;
+        const sign = dy < 0 ? -1 : 1;
+        parent.style.transition = `transform ${DUR}ms ease`;
+        parent.style.transform  = `translateY(${sign * -window.innerHeight}px)`;
+        callbacks.onDragCommit?.('v', dy < 0 ? 'up' : 'down', DUR);
+        setTimeout(() => {
+          parent.style.transition = '';
+          parent.style.transform  = '';
+          callbacks.onDragEndV?.();
+          if (dy < 0) callbacks.onSwipeUp?.();
+          else        callbacks.onSwipeDown?.();
+        }, DUR);
       }
 
       if (!committed) {

@@ -151,6 +151,7 @@ const state = {
 let _lastFocusedDate      = null;
 let _suppressNextCardClick = false; // set after gesture long-press to eat the trailing click
 let _swipeHintEl          = null;
+let _navDimEl             = null;
 
 // ── Data layer ─────────────────────────────────────────────────────────────
 
@@ -446,8 +447,9 @@ function showToast(msg, duration = 2200) {
 function updateRibbonLabels() {
   const days = getDaysOfWeek(state.currentWeekStart);
   const mid  = days[3];
-  document.getElementById('ribbonMonth').textContent =
-    `${getMonthName(mid)} ${mid.getFullYear()}`;
+  const mon2 = mid.toLocaleString('default', { month: 'short' });
+  const yr2  = String(mid.getFullYear() % 100).padStart(2, '0');
+  document.getElementById('ribbonMonth').textContent = `${mon2} ${yr2}`;
   const fyMonth = state.data.settings.fyStartMonth ?? 3;
   const fyDay   = state.data.settings.fyStartDay   ?? 6;
   document.getElementById('ribbonWeek').textContent =
@@ -1015,8 +1017,8 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     if (e.target.closest('.expanded-side-nav'))  return;
     _expStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     _expAxis  = null;
-    overlay.style.transition = 'none'; // suppress CSS transition during drag
-  }, { passive: true });
+    overlay.style.transition = 'none';
+  }, { passive: false });
 
   overlay.addEventListener('touchmove', e => {
     if (!_expStart) return;
@@ -1077,8 +1079,8 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
         openExpandedDay(formatDate(targetDate), { replaceHistory: true, _skipSlideIn: true });
       }, DUR + 10);
     } else {
-      const DUR = 350;
-      const tr  = `transform ${DUR}ms ${SPRING_EASE}`;
+      const DUR = 300;
+      const tr  = `transform ${DUR}ms ease`;
       overlay.style.transition              = tr;
       if (_ghostPrev) _ghostPrev.style.transition = tr;
       if (_ghostNext) _ghostNext.style.transition = tr;
@@ -1117,9 +1119,9 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   if (_slideFrom === 'left') overlay.classList.add('slide-from-left');
 
   if (_skipSlideIn) {
-    overlay.style.transition = 'none';
+    overlay.style.transform = 'translateX(-50%)'; // centre before first paint, no animation
     overlay.classList.add('open');
-    requestAnimationFrame(() => { overlay.style.transition = ''; });
+    requestAnimationFrame(() => { overlay.style.transform = ''; }); // hand off to CSS
   } else {
     requestAnimationFrame(() => overlay.classList.add('open'));
   }
@@ -3188,6 +3190,10 @@ async function init() {
   _swipeHintEl.className = 'swipe-hint';
   document.body.appendChild(_swipeHintEl);
 
+  _navDimEl = document.createElement('div');
+  _navDimEl.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;z-index:2;pointer-events:none';
+  document.body.appendChild(_navDimEl);
+
   let _prevWeekGhost = null, _nextWeekGhost = null;
   let _prevMonthGhost = null, _nextMonthGhost = null;
 
@@ -3331,6 +3337,30 @@ async function init() {
     onDragEnd: () => {
       _prevWeekGhost?.remove(); _prevWeekGhost = null;
       _nextWeekGhost?.remove(); _nextWeekGhost = null;
+    },
+    onDragCommit: (axis, dir, dur) => {
+      const r = gridWithSides.getBoundingClientRect();
+      if (axis === 'h') {
+        const tx = dir === 'left' ? -r.width : r.width;
+        [_prevWeekGhost, _nextWeekGhost].forEach(g => {
+          if (!g) return;
+          g.style.transition = `transform ${dur}ms ease`;
+          g.style.transform  = `translateX(${tx}px)`;
+        });
+      } else {
+        const ty = dir === 'up' ? -r.height : r.height;
+        [_prevMonthGhost, _nextMonthGhost].forEach(g => {
+          if (!g) return;
+          g.style.transition = `transform ${dur}ms ease`;
+          g.style.transform  = `translateY(${ty}px)`;
+        });
+      }
+      _navDimEl.style.transition = 'none';
+      _navDimEl.style.opacity    = '0.12';
+      setTimeout(() => {
+        _navDimEl.style.transition = `opacity ${Math.round(dur * 0.6)}ms ease`;
+        _navDimEl.style.opacity    = '0';
+      }, Math.round(dur * 0.4));
     },
     onDragStartV: () => {
       _prevMonthGhost = _buildMonthGhost(-1);
