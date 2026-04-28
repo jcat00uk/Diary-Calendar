@@ -421,7 +421,7 @@ function buildGCalRecurringEvent(series, tz) {
     summary:    _plainText(series.title),
     start, end,
     recurrence: [_buildRRule(series.repeat)],
-    extendedProperties: { private: { chronicleId: series.id } },
+    extendedProperties: { private: { chronicleId: series.id, ...(series.theme ? { chronicleTheme: series.theme } : {}) } },
   };
   if (series.notes) gcalEvt.description = _plainText(series.notes);
   gcalEvt.reminders = series.reminderMinutes != null
@@ -462,7 +462,7 @@ function buildGCalEvent(evt, dateKey, tz) {
     summary: _plainText(evt.title),
     start,
     end,
-    extendedProperties: { private: { chronicleId: evt.id } },
+    extendedProperties: { private: { chronicleId: evt.id, ...(evt.theme ? { chronicleTheme: evt.theme } : {}) } },
   };
 
   if (evt.notes) gcalEvt.description = _plainText(evt.notes);
@@ -499,12 +499,27 @@ function parseGCalEvent(gcalEvt) {
     if (endDay > startDay) endDate = endDay;
   }
 
+  // Recover endTime for same-day timed events
+  let endTime = null;
+  if (!isAllDay && gcalEvt.end?.dateTime) {
+    const endDay   = _fmtDate(new Date(gcalEvt.end.dateTime));
+    const startDay = _fmtDate(new Date(gcalEvt.start?.dateTime || 0));
+    if (endDay === startDay) {
+      const dt = new Date(gcalEvt.end.dateTime);
+      endTime = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+    }
+  }
+
+  const priv = gcalEvt.extendedProperties?.private || {};
+
   return {
-    title:            gcalEvt.summary || '(no title)',
+    title:           gcalEvt.summary || '(no title)',
     time,
+    endTime,
     endDate,
-    notes:            gcalEvt.description || '',
-    reminderMinutes:  popupReminder?.minutes ?? null,
+    notes:           gcalEvt.description || '',
+    reminderMinutes: popupReminder?.minutes ?? null,
+    theme:           priv.chronicleTheme || null,
     googleEventId:    gcalEvt.id,
     googleCalendarId: gcalEvt.organizer?.email || null,
     syncStatus:       'synced',

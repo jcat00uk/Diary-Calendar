@@ -3286,7 +3286,10 @@ async function init() {
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scheduleReminders(state.data);
+    if (!document.hidden) {
+      scheduleReminders(state.data);
+      bgSync(state.data, _applyRemoteData, _openConflict).catch(console.warn);
+    }
   });
 
   scheduleNextDayRefresh();
