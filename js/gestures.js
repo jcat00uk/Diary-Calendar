@@ -21,6 +21,7 @@ export function initGestures(el, callbacks) {
     startTarget = e.target;
     moved       = false;
     hintFired   = false;
+    el.style.transition = ''; // cancel any in-progress snap-back
 
     // Long-press only triggers outside editable areas; swipe still works anywhere
     if (!e.target.closest('[contenteditable]')) {
@@ -48,6 +49,15 @@ export function initGestures(el, callbacks) {
       el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     }
 
+    if (moved) {
+      // Translate the grid in real-time so the user sees their finger drag the content
+      if (adx >= ady) {
+        el.style.transform = `translateX(${dx}px)`;
+      } else {
+        el.style.transform = `translateY(${dy}px)`;
+      }
+    }
+
     if (moved && !hintFired) {
       let dir = null;
       if (adx >= HINT_PX && adx > ady) dir = dx < 0 ? 'left' : 'right';
@@ -69,13 +79,29 @@ export function initGestures(el, callbacks) {
       const adx = Math.abs(dx);
       const ady = Math.abs(dy);
 
+      // Final finger position decides the action — if user has swiped back
+      // toward origin, neither threshold is met and the grid snaps back.
+      let committed = false;
       if (adx >= SWIPE_MIN_PX && adx > ady * SWIPE_RATIO) {
+        committed = true;
+        el.style.transform = ''; // clear before re-render
         if (dx < 0) callbacks.onSwipeLeft?.();
         else        callbacks.onSwipeRight?.();
       } else if (ady >= SWIPE_MIN_PX && ady > adx * SWIPE_RATIO) {
+        committed = true;
+        el.style.transform = ''; // clear before re-render
         if (dy < 0) callbacks.onSwipeUp?.();
         else        callbacks.onSwipeDown?.();
       }
+
+      if (!committed) {
+        // Animate snap-back to origin
+        el.style.transition = 'transform 0.25s ease';
+        el.style.transform  = '';
+        setTimeout(() => { el.style.transition = ''; }, 260);
+      }
+    } else {
+      el.style.transform = '';
     }
 
     startTarget = null;
@@ -86,6 +112,11 @@ export function initGestures(el, callbacks) {
     el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     callbacks.onHint?.(null);
     hintFired = false;
+    if (moved) {
+      el.style.transition = 'transform 0.25s ease';
+      el.style.transform  = '';
+      setTimeout(() => { el.style.transition = ''; }, 260);
+    }
     startTarget = null;
   }, { passive: true });
 
@@ -125,29 +156,47 @@ export function initGestures(el, callbacks) {
   });
 }
 
-/** Lightweight swipe-only detector for overlays (expanded day, modals). */
-export function initSwipe(el, callbacks) {
-  let startX = 0, startY = 0, active = false, hintFired = false;
+/** Lightweight swipe-only detector for overlays (expanded day, modals).
+ *  options.shouldIgnoreTarget(target) — return true to suppress gesture start. */
+export function initSwipe(el, callbacks, options = {}) {
+  const { shouldIgnoreTarget } = options;
+  let startX = 0, startY = 0, active = false, hintFired = false, swipeAxis = null;
 
   el.addEventListener('touchstart', e => {
-    startX    = e.touches[0].clientX;
-    startY    = e.touches[0].clientY;
-    active    = true;
-    hintFired = false;
+    if (shouldIgnoreTarget?.(e.target)) { active = false; return; }
+    startX     = e.touches[0].clientX;
+    startY     = e.touches[0].clientY;
+    active     = true;
+    hintFired  = false;
+    swipeAxis  = null;
+    el.style.transition = ''; // cancel any in-progress snap-back
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
-    if (!active || hintFired) return;
+    if (!active) return;
     const dx  = e.touches[0].clientX - startX;
     const dy  = e.touches[0].clientY - startY;
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
-    if (adx >= HINT_PX && adx > ady) {
-      hintFired = true;
-      callbacks.onHint?.(dx < 0 ? 'left' : 'right');
-    } else if (ady >= HINT_PX && ady > adx) {
-      hintFired = true;
-      callbacks.onHint?.(dy < 0 ? 'up' : 'down');
+
+    // Lock to the dominant axis once we know it
+    if (!swipeAxis) {
+      if (adx >= HINT_PX && adx > ady) swipeAxis = 'h';
+      else if (ady >= HINT_PX && ady > adx) swipeAxis = 'v';
+    }
+
+    // Translate the overlay in real-time so the user sees the drag
+    if (swipeAxis === 'h') el.style.transform = `translateX(${dx}px)`;
+    else if (swipeAxis === 'v') el.style.transform = `translateY(${dy}px)`;
+
+    if (!hintFired) {
+      if (adx >= HINT_PX && adx > ady) {
+        hintFired = true;
+        callbacks.onHint?.(dx < 0 ? 'left' : 'right');
+      } else if (ady >= HINT_PX && ady > adx) {
+        hintFired = true;
+        callbacks.onHint?.(dy < 0 ? 'up' : 'down');
+      }
     }
   }, { passive: true });
 
@@ -160,18 +209,37 @@ export function initSwipe(el, callbacks) {
     const dy  = e.changedTouches[0].clientY - startY;
     const adx = Math.abs(dx);
     const ady = Math.abs(dy);
+
+    // Final position decides — swiping back before release cancels the action
+    let committed = false;
     if (adx >= SWIPE_MIN_PX && adx > ady * SWIPE_RATIO) {
+      committed = true;
+      el.style.transform = ''; // clear before navigation replaces the overlay
       if (dx < 0) callbacks.onSwipeLeft?.();
       else        callbacks.onSwipeRight?.();
     } else if (ady >= SWIPE_MIN_PX && ady > adx * SWIPE_RATIO) {
+      committed = true;
+      el.style.transform = '';
       if (dy < 0) callbacks.onSwipeUp?.();
       else        callbacks.onSwipeDown?.();
     }
+
+    if (!committed) {
+      el.style.transition = 'transform 0.25s ease';
+      el.style.transform  = '';
+      setTimeout(() => { el.style.transition = ''; }, 260);
+    }
+    swipeAxis = null;
   }, { passive: true });
 
   el.addEventListener('touchcancel', () => {
+    if (!active) return;
     active    = false;
     hintFired = false;
+    swipeAxis = null;
     callbacks.onHint?.(null);
+    el.style.transition = 'transform 0.25s ease';
+    el.style.transform  = '';
+    setTimeout(() => { el.style.transition = ''; }, 260);
   }, { passive: true });
 }

@@ -69,6 +69,8 @@ async function _scheduleNative(data) {
 
   const now    = Date.now();
   const cutoff = now + 24 * 60 * 60 * 1000;
+  // Recurring series need a longer window so all upcoming instances get a notification
+  const seriesCutoff = now + 30 * 24 * 60 * 60 * 1000;
   const notifications = [];
 
   for (const [dateKey, day] of Object.entries(data.days || {})) {
@@ -91,13 +93,13 @@ async function _scheduleNative(data) {
     }
   }
 
-  for (const dateKey of _datesInWindow(now, cutoff)) {
+  for (const dateKey of _datesInWindow(now, seriesCutoff)) {
     for (const series of (data.series || [])) {
       if (series.reminderMinutes == null || !series.time) continue;
       const occ = generateOccurrencesForSeries(series, dateKey);
       if (!occ) continue;
       const fireAt = _fireTime(dateKey, series.time, series.reminderMinutes);
-      if (fireAt <= now || fireAt > cutoff) continue;
+      if (fireAt <= now || fireAt > seriesCutoff) continue;
       const id = Math.floor(Math.random() * 2_000_000_000);
       _nativeIds.push(id);
       notifications.push({

@@ -432,6 +432,39 @@ async function ensureChronicleCalendar(data) {
 const _fmtDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+const _genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+// Reverse map from GCal day abbreviation to JS getDay() value
+const _RRULE_DAYS = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function _parseRRule(rruleArr) {
+  if (!Array.isArray(rruleArr) || !rruleArr.length) return null;
+  const raw = rruleArr[0].replace(/^RRULE:/i, '');
+  const parts = {};
+  raw.split(';').forEach(p => {
+    const eq = p.indexOf('=');
+    if (eq > 0) parts[p.slice(0, eq)] = p.slice(eq + 1);
+  });
+  const freq = (parts.FREQ || '').toLowerCase();
+  if (!['daily', 'weekly', 'monthly', 'yearly'].includes(freq)) return null;
+  const interval = Math.max(1, parseInt(parts.INTERVAL || '1', 10) || 1);
+  let byWeekday = null;
+  if (freq === 'weekly' && parts.BYDAY) {
+    byWeekday = parts.BYDAY.split(',').map(d => _RRULE_DAYS[d.trim()]).filter(d => d !== undefined);
+    if (!byWeekday.length) byWeekday = null;
+  }
+  let endType = 'never', endCount = null, endDate = null;
+  if (parts.COUNT) {
+    endType = 'after';
+    endCount = parseInt(parts.COUNT, 10);
+  } else if (parts.UNTIL) {
+    endType = 'on';
+    const u = parts.UNTIL;
+    endDate = `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}`;
+  }
+  return { freq, interval, byWeekday, end: { type: endType, count: endCount, date: endDate } };
+}
+
 // Build a local datetime string one hour after dateStr+timeStr, no UTC conversion
 function _localPlusOneHour(dateStr, timeStr) {
   const d = new Date(`${dateStr}T${timeStr}:00`);
@@ -748,15 +781,37 @@ export async function syncFromGCal(data) {
     }
   }
 
+  // Build lookup: googleEventId → series (for recurring parent matching)
+  const seriesByGCalId = {};
+  for (const series of (data.series || [])) {
+    if (series.googleEventId) seriesByGCalId[series.googleEventId] = series;
+  }
+
+  // Collect recurring parent IDs from instances we encounter
+  const recurringParentIds = new Set();
+
   for (const gcalEvt of items) {
     if (gcalEvt.status === 'cancelled') {
-      const local = localByGCalId[gcalEvt.id];
-      if (local && local.evt.syncStatus !== 'deleted') {
-        local.evt.syncStatus = 'deleted';
+      if (!gcalEvt.recurringEventId) {
+        // Cancelled single event
+        const local = localByGCalId[gcalEvt.id];
+        if (local && local.evt.syncStatus !== 'deleted') {
+          local.evt.syncStatus = 'deleted';
+        }
+      } else {
+        // Track cancelled instance's parent for series handling
+        recurringParentIds.add(gcalEvt.recurringEventId);
       }
       continue;
     }
 
+    // Skip individual recurring event instances — import only the parent series
+    if (gcalEvt.recurringEventId) {
+      recurringParentIds.add(gcalEvt.recurringEventId);
+      continue;
+    }
+
+    // Regular single event
     const local = localByGCalId[gcalEvt.id];
     if (local) {
       const gcalUpdated = new Date(gcalEvt.updated).getTime();
@@ -778,6 +833,79 @@ export async function syncFromGCal(data) {
         modified: Date.now(),
         ...parseGCalEvent(gcalEvt),
       });
+    }
+  }
+
+  // Import recurring event parents as Chronicle series
+  for (const parentId of recurringParentIds) {
+    if (seriesByGCalId[parentId]) continue; // Already a known series
+
+    try {
+      const resp = await gcalRequest(
+        `${GCAL_BASE}/calendars/${encodeURIComponent(chronicleCalId)}/events/${encodeURIComponent(parentId)}`
+      );
+      if (!resp.ok) continue;
+      const parentEvt = await resp.json();
+      if (parentEvt.status === 'cancelled') continue;
+
+      const repeat = _parseRRule(parentEvt.recurrence);
+      if (!repeat) continue;
+
+      const isAllDay = !!parentEvt.start?.date;
+      let time = null;
+      if (!isAllDay && parentEvt.start?.dateTime) {
+        const dt = new Date(parentEvt.start.dateTime);
+        time = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+      }
+      const popupReminder = parentEvt.reminders?.overrides?.find(r => r.method === 'popup');
+      const priv = parentEvt.extendedProperties?.private || {};
+
+      // Check if this series was originally created by Chronicle (has chronicleId)
+      const chronicleId = priv.chronicleId;
+      const existingSeries = chronicleId ? data.series.find(s => s.id === chronicleId) : null;
+
+      if (existingSeries) {
+        existingSeries.googleEventId    = parentEvt.id;
+        existingSeries.googleCalendarId = chronicleCalId;
+        existingSeries.syncStatus       = 'synced';
+        const gcalUpdated = new Date(parentEvt.updated).getTime();
+        const localSynced = new Date(existingSeries.lastSyncedAt || 0).getTime();
+        if (gcalUpdated > localSynced) {
+          existingSeries.title           = parentEvt.summary || existingSeries.title;
+          existingSeries.repeat          = repeat;
+          existingSeries.time            = time;
+          existingSeries.reminderMinutes = popupReminder?.minutes ?? null;
+          existingSeries.theme           = priv.chronicleTheme || existingSeries.theme;
+          existingSeries.notes           = parentEvt.description || existingSeries.notes;
+          existingSeries.lastSyncedAt    = parentEvt.updated || new Date().toISOString();
+        }
+        seriesByGCalId[parentEvt.id] = existingSeries;
+      } else {
+        // Create a new Chronicle series from this GCal recurring parent event
+        const startDate = parentEvt.start?.date || _fmtDate(new Date(parentEvt.start?.dateTime || 0));
+        const newSeries = {
+          id:              _genId(),
+          type:            'event',
+          title:           parentEvt.summary || '(no title)',
+          time,
+          startDate,
+          repeat,
+          notes:           parentEvt.description || '',
+          reminderMinutes: popupReminder?.minutes ?? null,
+          theme:           priv.chronicleTheme || null,
+          exceptions:      {},
+          created:         Date.now(),
+          modified:        Date.now(),
+          googleEventId:    parentEvt.id,
+          googleCalendarId: chronicleCalId,
+          syncStatus:       'synced',
+          lastSyncedAt:     parentEvt.updated || new Date().toISOString(),
+        };
+        data.series.push(newSeries);
+        seriesByGCalId[parentEvt.id] = newSeries;
+      }
+    } catch (err) {
+      console.warn('[Chronicle GCal] fetch recurring parent failed:', parentId, err.message);
     }
   }
 }

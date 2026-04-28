@@ -643,6 +643,8 @@ function renderMultidayBars() {
 function renderWeekGrid() {
   const grid = document.getElementById('weekGrid');
   if (!grid) return;
+  grid.style.transform  = '';
+  grid.style.transition = '';
   grid.innerHTML = '';
 
   const ws = state.data.settings.weekStart;
@@ -1508,16 +1510,35 @@ if (freq === 'daily' || freq === 'weekly' || freq === 'monthly' || freq === 'yea
         };
       }
     } else if (isEdit) {
-      updateEvent(state.data, dateKey, existing.id, {
-        title: titleVal,
-        type: selectedType,
-        time: timeVal,
-        endDate: endDateVal,
-        notes: notesVal,
-        reminderMinutes: reminderVal,
-        theme: themeVal,
-        repeat,
-      });
+      if (repeat) {
+        // Converting a non-recurring event to a recurring series
+        const oldEvt = state.data.days[dateKey]?.events?.find(e => e.id === existing.id);
+        if (oldEvt?.googleEventId) {
+          oldEvt.syncStatus = 'deleted';
+        } else if (oldEvt) {
+          deleteEvent(state.data, dateKey, existing.id);
+        }
+        addEvent(state.data, dateVal, {
+          title: titleVal,
+          type: selectedType,
+          time: timeVal,
+          notes: notesVal,
+          reminderMinutes: reminderVal,
+          theme: themeVal,
+          repeat,
+        });
+      } else {
+        updateEvent(state.data, dateKey, existing.id, {
+          title: titleVal,
+          type: selectedType,
+          time: timeVal,
+          endDate: endDateVal,
+          notes: notesVal,
+          reminderMinutes: reminderVal,
+          theme: themeVal,
+          repeat: null,
+        });
+      }
     } else {
       addEvent(state.data, dateVal, {
         title: titleVal,
