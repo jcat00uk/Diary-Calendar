@@ -1058,6 +1058,15 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
       if (_ghostPrev) _ghostPrev.style.transition = tr;
       if (_ghostNext) _ghostNext.style.transition = tr;
 
+      if (_navDimEl) {
+        _navDimEl.style.transition = 'none';
+        _navDimEl.style.opacity    = '0.1';
+        setTimeout(() => {
+          _navDimEl.style.transition = `opacity ${Math.round(DUR * 0.6)}ms ease`;
+          _navDimEl.style.opacity    = '0';
+        }, Math.round(DUR * 0.4));
+      }
+
       const targetDate = dx < 0 ? nextDate : prevDate;
       if (dx < 0) {
         overlay.style.transform              = 'translateX(-150%)';
@@ -1119,9 +1128,8 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   if (_slideFrom === 'left') overlay.classList.add('slide-from-left');
 
   if (_skipSlideIn) {
-    overlay.style.transform = 'translateX(-50%)'; // centre before first paint, no animation
+    overlay.style.transform = 'translateX(-50%)'; // pin to centre — no CSS transition fires
     overlay.classList.add('open');
-    requestAnimationFrame(() => { overlay.style.transform = ''; }); // hand off to CSS
   } else {
     requestAnimationFrame(() => overlay.classList.add('open'));
   }

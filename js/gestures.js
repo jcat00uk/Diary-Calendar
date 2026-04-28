@@ -115,9 +115,9 @@ export function initGestures(el, callbacks, options = {}) {
         setTimeout(() => {
           parent.style.transition = '';
           parent.style.transform  = '';
-          callbacks.onDragEnd?.();
-          if (dx < 0) callbacks.onSwipeLeft?.();
+          if (dx < 0) callbacks.onSwipeLeft?.();  // render new content first
           else        callbacks.onSwipeRight?.();
+          callbacks.onDragEnd?.();                // then remove ghosts
         }, DUR);
       } else if (ady >= thV && ady > adx * SWIPE_RATIO) {
         committed = true;
@@ -129,9 +129,9 @@ export function initGestures(el, callbacks, options = {}) {
         setTimeout(() => {
           parent.style.transition = '';
           parent.style.transform  = '';
-          callbacks.onDragEndV?.();
-          if (dy < 0) callbacks.onSwipeUp?.();
+          if (dy < 0) callbacks.onSwipeUp?.();    // render new content first
           else        callbacks.onSwipeDown?.();
+          callbacks.onDragEndV?.();               // then remove ghosts
         }, DUR);
       }
 

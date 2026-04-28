@@ -218,25 +218,3 @@ Start in INTERACTIVE FIX MODE:
 Do NOT output code yet.
 
 After I confirm, switch to DIFF MODE and generate the patches.
-
-
-keytool -list -v -keystore "S:\Coding\Chronicle Android\Chronicle\Chronicle\jcatkey.jks" -alias chronicle
-
-Certificate fingerprints:
-         SHA1: 4D:7F:6F:E9:3D:5A:A4:06:95:4B:5C:C4:6E:D9:F8:E8:97:51:91:C1
-         SHA256: C1:48:54:00:65:19:69:81:98:FF:99:B4:52:CB:63:06:81:95:46:54:E0:F2:62:5C:BC:7F:77:4F:B4:C3:21:78
-         
-         
-if i want to tweak the 50% swipe trigger , what code do i change
-In app.js, the initGestures call at the bottom of the file has these two lines:
-
-
-commitThresholdH: () => window.innerWidth  * 0.5,
-commitThresholdV: () => window.innerHeight * 0.5,
-Change 0.5 to whatever fraction you want — e.g. 0.35 for 35% of screen width/height. H is the left/right (week) swipe, V is the up/down (month) swipe.
-
-For the expanded day view, the threshold is separately in app.js inside _handleExpEnd:
-
-
-if (Math.abs(dx) >= window.innerWidth * 0.5) {
-Same idea — change 0.5 there to adjust the day-swipe trigger independently.

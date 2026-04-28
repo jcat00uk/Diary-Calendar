@@ -15,6 +15,7 @@
   transition: transform 0.3s ease;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
+  touch-action: pan-y;
 }
 
 .expanded-overlay.slide-from-left {
