@@ -284,6 +284,13 @@
 .expanded-diary-area blockquote {
   line-height: var(--line-height-diary);
   margin: 0;
+  font-size: 14px;
+}
+
+.expanded-diary-area span, .expanded-diary-area b, .expanded-diary-area strong,
+.expanded-diary-area i, .expanded-diary-area em, .expanded-diary-area a {
+  line-height: inherit;
+  font-size: inherit;
 }
 
 /* ── Expanded view day-navigation strips (top & bottom) ──────── */

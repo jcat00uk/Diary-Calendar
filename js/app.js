@@ -3438,14 +3438,14 @@ async function init() {
     commitThresholdH: () => window.innerWidth  * 0.5,
     commitThresholdV: () => window.innerHeight * 0.5,
     zoneCheck(axis, sx, sy) {
-      if (axis === 'h') {
-        const tr = navTopEl.getBoundingClientRect();
-        const br = navBotEl.getBoundingClientRect();
-        return (sy >= tr.top && sy <= tr.bottom) || (sy >= br.top && sy <= br.bottom);
-      } else {
-        const gr = weekGrid.getBoundingClientRect();
-        return Math.abs(sx - (gr.left + gr.width / 2)) <= 30;
-      }
+      const tr = navTopEl.getBoundingClientRect();
+      const br = navBotEl.getBoundingClientRect();
+      const inTopStrip = sy >= tr.top && sy <= tr.bottom;
+      const inBotStrip = sy >= br.top && sy <= br.bottom;
+      if (axis === 'h') return inTopStrip || inBotStrip;
+      // Vertical axis: only from center strip, never from horizontal nav strips
+      const gr = weekGrid.getBoundingClientRect();
+      return Math.abs(sx - (gr.left + gr.width / 2)) <= 30 && !inTopStrip && !inBotStrip;
     },
   });
 
@@ -3684,7 +3684,7 @@ async function init() {
           if (!sel || !sel.rangeCount) return;
           const rect     = sel.getRangeAt(0).getBoundingClientRect();
           const vvH      = window.visualViewport.height;
-          const toolbarH = document.querySelector('.format-toolbar.visible') ? 44 : 0;
+          const toolbarH = 44; // format toolbar always shown when diary is focused
           const clearance = toolbarH + 24; // toolbar + breathing room
           if (rect.bottom > vvH - clearance) {
             let sc = active;

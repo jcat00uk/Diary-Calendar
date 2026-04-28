@@ -21,7 +21,7 @@ export function initGestures(el, callbacks, options = {}) {
   let hintFired = false;
   let swipeAxis = null;
   let dragStartFired = false;
-  let zoneBlocked = false;
+  let blockedAxes = new Set(); // axes that failed zoneCheck — other axes still allowed
 
   // ── Touch ───────────────────────────────────────────────────────────────
   el.addEventListener('touchstart', e => {
@@ -33,7 +33,7 @@ export function initGestures(el, callbacks, options = {}) {
     hintFired      = false;
     swipeAxis      = null;
     dragStartFired = false;
-    zoneBlocked    = false;
+    blockedAxes    = new Set();
     parent.style.transition = '';
 
     if (!e.target.closest('[contenteditable]')) {
@@ -61,14 +61,15 @@ export function initGestures(el, callbacks, options = {}) {
       el.querySelectorAll('.day-card.pressing').forEach(c => c.classList.remove('pressing'));
     }
 
-    // Commit to an axis once HINT_PX is exceeded — no translation before that
-    if (moved && !swipeAxis && !zoneBlocked) {
-      if (adx >= HINT_PX && adx > ady) {
+    // Commit to an axis once HINT_PX is exceeded — no translation before that.
+    // Each axis is tried independently; failing one doesn't prevent the other.
+    if (moved && !swipeAxis) {
+      if (adx >= HINT_PX && adx > ady && !blockedAxes.has('h')) {
         if (!zoneCheck || zoneCheck('h', startX, startY)) swipeAxis = 'h';
-        else zoneBlocked = true;
-      } else if (ady >= HINT_PX && ady > adx) {
+        else blockedAxes.add('h');
+      } else if (ady >= HINT_PX && ady > adx && !blockedAxes.has('v')) {
         if (!zoneCheck || zoneCheck('v', startX, startY)) swipeAxis = 'v';
-        else zoneBlocked = true;
+        else blockedAxes.add('v');
       }
     }
 

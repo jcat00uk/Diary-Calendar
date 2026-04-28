@@ -307,14 +307,21 @@
   margin: 0;
 }
 
-/* Ensure every block element uses the exact diary line-height so
-   text never drifts off the ruled background */
+/* Force every element in the diary to exact line metrics so text stays
+   on the ruled lines in Android WebView / Capacitor */
 .diary-area p,
 .diary-area div,
 .diary-area li,
 .diary-area blockquote {
   line-height: var(--line-height-diary);
   margin: 0;
+  font-size: 12px;
+}
+
+.diary-area span, .diary-area b, .diary-area strong,
+.diary-area i, .diary-area em, .diary-area a {
+  line-height: inherit;
+  font-size: inherit;
 }
 
 /* ── Format toolbar — fixed bottom ribbon, shows on diary focus ─ */
