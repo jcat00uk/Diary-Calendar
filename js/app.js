@@ -28,7 +28,7 @@ import {
   gdriveState, initGoogleAuth, signIn, signOut,
   syncNow, bgSync,
   syncToGCal, fullSync, fetchCalendarList,
-  resetGCalThrottle, handleNativeToken,
+  resetGCalThrottle, handleNativeToken, restoreToken,
 } from './sync.js';
 import { scheduleReminders, requestNotificationPermission } from './notifications.js';
 import { buildICS } from './ical.js';
@@ -2016,7 +2016,7 @@ function openSettingsDropdown() {
                 ? `<div class="settings-sublabel">${esc(gdriveState.userEmail)}</div>`
                 : '<div class="settings-sublabel">Sign in above to enable</div>'}
             </div>
-            <div style="display:flex;gap:5px;flex-shrink:0">
+            <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
               ${gdriveState.userEmail
                 ? `<button class="settings-gdrive-btn" data-gcal-action="sync">Sync</button>
                    <button class="settings-gdrive-btn" data-gcal-action="signout">Sign out</button>`
@@ -2974,6 +2974,11 @@ async function init() {
   });
 
   initGoogleAuth(state.data.settings.googleAuth.clientId);
+
+  const tokenRestored = await restoreToken();
+  if (tokenRestored) {
+    _runFullSync();
+  }
 
   renderWeekGrid();
 

@@ -176,12 +176,55 @@ export function signOut() {
   localStorage.removeItem('chronicle_userEmail');
   localStorage.removeItem('chronicle_hasConsented');
   localStorage.removeItem(CONSENTED_SCOPE_KEY);
+  _clearPersistedToken();
   _statusCallback?.('unsigned', null);
+}
+
+function _isNativePlatform() {
+  return !!(window.Capacitor?.isNativePlatform?.());
+}
+
+async function _persistToken(token, expiresAt) {
+  const Prefs = window.Capacitor?.Plugins?.Preferences;
+  if (!Prefs) return;
+  await Prefs.set({
+    key:   'chronicle_auth_token',
+    value: JSON.stringify({ token, expiresAt }),
+  });
+}
+
+function _clearPersistedToken() {
+  window.Capacitor?.Plugins?.Preferences?.remove({ key: 'chronicle_auth_token' });
+}
+
+export async function restoreToken() {
+  if (!_isNativePlatform()) return false;
+  try {
+    const Prefs = window.Capacitor?.Plugins?.Preferences;
+    if (!Prefs) return false;
+    const result = await Prefs.get({ key: 'chronicle_auth_token' });
+    if (!result.value) return false;
+    const stored = JSON.parse(result.value);
+    if (stored.expiresAt < Date.now() + 5 * 60_000) {
+      _clearPersistedToken();
+      return false;
+    }
+    const remaining = Math.floor((stored.expiresAt - Date.now()) / 1000);
+    await handleNativeToken(stored.token, remaining);
+    return true;
+  } catch (e) {
+    console.warn('restoreToken failed', e);
+    return false;
+  }
 }
 
 export async function handleNativeToken(accessToken, expiresIn = 3600) {
   gdriveState.token          = accessToken;
   gdriveState.tokenExpiresAt = Date.now() + expiresIn * 1000;
+
+  if (_isNativePlatform()) {
+    _persistToken(accessToken, gdriveState.tokenExpiresAt);
+  }
 
   const saved = localStorage.getItem('chronicle_userEmail');
   try {
@@ -218,6 +261,8 @@ async function driveRequest(url, options = {}) {
   });
   if (resp.status === 401) {
     gdriveState.token = null;
+    _clearPersistedToken();
+    _toastCallback?.('Session expired — please sign in again');
     throw new Error('auth_expired');
   }
   return resp;
@@ -348,7 +393,12 @@ async function gcalRequest(url, options = {}) {
     ...options,
     headers: { Authorization: 'Bearer ' + gdriveState.token, ...(options.headers || {}) },
   });
-  if (resp.status === 401) { gdriveState.token = null; throw new Error('auth_expired'); }
+  if (resp.status === 401) {
+    gdriveState.token = null;
+    _clearPersistedToken();
+    _toastCallback?.('Session expired — please sign in again');
+    throw new Error('auth_expired');
+  }
   if (resp.status === 403) throw new Error('access_denied');
   if (resp.status === 429) throw new Error('rate_limited');
   return resp;
