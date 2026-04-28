@@ -309,7 +309,13 @@
 }
 
 .expanded-nav-strip--top    { border-top: none; }
-.expanded-nav-strip--bottom { border-bottom: none; }
+.expanded-nav-strip--bottom {
+  border-bottom: none;
+  /* Ensure the strip clears Android gesture navigation area */
+  padding-bottom: max(var(--safe-bottom), 8px);
+  height: auto;
+  min-height: 28px;
+}
 
 .expanded-nav-strip .icon {
   width: 11px;

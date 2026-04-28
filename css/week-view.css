@@ -249,12 +249,31 @@
   z-index: 3;
   pointer-events: none;
   border-radius: 2px;
+  overflow: visible;
   transition: background 0.15s, box-shadow 0.15s;
 }
+
+/* ↑ ↓ arrows centred on the strip */
+.swipe-zone-center::before,
+.swipe-zone-center::after {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(55,138,221,0.45);
+  transition: color 0.15s;
+}
+.swipe-zone-center::before { content: '↑'; top: calc(50% - 14px); }
+.swipe-zone-center::after  { content: '↓'; top: calc(50% + 4px);  }
 
 .swipe-zone-center.swipe-zone-active {
   background: rgba(55,138,221,0.38);
   box-shadow: 0 0 10px rgba(55,138,221,0.40);
   transition: none;
+}
+.swipe-zone-center.swipe-zone-active::before,
+.swipe-zone-center.swipe-zone-active::after {
+  color: rgba(55,138,221,0.80);
 }
 

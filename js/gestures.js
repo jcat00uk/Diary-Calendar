@@ -9,11 +9,11 @@ const HINT_PX        = SWIPE_HINT_PX;
 export const SPRING_EASE = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
 export function initGestures(el, callbacks, options = {}) {
-  const { commitThresholdH, commitThresholdV, zoneCheck } = options;
+  const { commitThresholdH, commitThresholdV, zoneCheck, translateEl } = options;
   const getThH = () => typeof commitThresholdH === 'function' ? commitThresholdH() : (commitThresholdH ?? SWIPE_MIN_PX);
   const getThV = () => typeof commitThresholdV === 'function' ? commitThresholdV() : (commitThresholdV ?? SWIPE_MIN_PX);
 
-  const parent = el.parentElement; // translated element (gridWithSides)
+  const parent = translateEl ?? el.parentElement; // translated element (gridWithSides)
   let startX = 0, startY = 0;
   let startTarget = null;
   let moved = false;

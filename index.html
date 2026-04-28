@@ -65,11 +65,12 @@
     <!-- ── Week container ── -->
     <main class="week-container" id="weekContainer" role="main">
 
-      <!-- Previous month arrow (top = up = prev month) -->
+      <!-- Previous month arrow (top) — click = prev month, swipe ◄► = prev/next week -->
       <div class="nav-arrow nav-arrow--top" id="navPrevWeek"
            role="button" tabindex="0" aria-label="Previous month">
-        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-up"/></svg>
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-left"/></svg>
         <span>Prev month</span>
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>
 
       <!-- Grid + side arrows -->
@@ -93,11 +94,12 @@
 
       </div>
 
-      <!-- Next month arrow (bottom = down = next month) -->
+      <!-- Next month arrow (bottom) — click = next month, swipe ◄► = prev/next week -->
       <div class="nav-arrow nav-arrow--bottom" id="navNextWeek"
            role="button" tabindex="0" aria-label="Next month">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-left"/></svg>
         <span>Next month</span>
-        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-down"/></svg>
+        <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#icon-chevron-right"/></svg>
       </div>
 
     </main>

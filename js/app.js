@@ -1143,8 +1143,11 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   if (_slideFrom === 'left') overlay.classList.add('slide-from-left');
 
   if (_skipSlideIn) {
-    overlay.style.transform = 'translateX(-50%)'; // pin to centre — no CSS transition fires
+    // Suppress the CSS transition so the overlay appears instantly at centre
+    overlay.style.transition = 'none';
+    overlay.style.transform  = 'translateX(-50%)';
     overlay.classList.add('open');
+    requestAnimationFrame(() => { overlay.style.transition = ''; });
   } else {
     requestAnimationFrame(() => overlay.classList.add('open'));
   }
@@ -3206,6 +3209,7 @@ async function init() {
   });
 
   // ── Swipe + long-press on week grid ──
+  const weekContainer = document.getElementById('weekContainer');
   const weekGrid      = document.getElementById('weekGrid');
   const gridWithSides = weekGrid.parentElement;
   // Create the swipe hint overlay (one element reused for all gestures)
@@ -3360,7 +3364,7 @@ async function init() {
     return wrapper;
   }
 
-  initGestures(weekGrid, {
+  initGestures(weekContainer, {
     onLongPress:  dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
     onSwipeLeft:  () => nextWeek(),
     onSwipeRight: () => prevWeek(),
@@ -3430,6 +3434,7 @@ async function init() {
       _nextMonthGhost?.remove(); _nextMonthGhost = null;
     },
   }, {
+    translateEl: gridWithSides,
     commitThresholdH: () => window.innerWidth  * 0.5,
     commitThresholdV: () => window.innerHeight * 0.5,
     zoneCheck(axis, sx, sy) {
@@ -3669,7 +3674,7 @@ async function init() {
           ? `${window.visualViewport.height}px`
           : '';
       });
-      // Scroll cursor into view when keyboard appears
+      // Scroll cursor into view when keyboard appears, clearing toolbar + keyboard
       if (offset > 0) {
         clearTimeout(_vvScrollTimer);
         _vvScrollTimer = setTimeout(() => {
@@ -3677,16 +3682,18 @@ async function init() {
           if (!active || !active.isContentEditable) return;
           const sel = window.getSelection();
           if (!sel || !sel.rangeCount) return;
-          const rect = sel.getRangeAt(0).getBoundingClientRect();
-          const vvH  = window.visualViewport.height;
-          if (rect.bottom > vvH - 10) {
+          const rect     = sel.getRangeAt(0).getBoundingClientRect();
+          const vvH      = window.visualViewport.height;
+          const toolbarH = document.querySelector('.format-toolbar.visible') ? 44 : 0;
+          const clearance = toolbarH + 24; // toolbar + breathing room
+          if (rect.bottom > vvH - clearance) {
             let sc = active;
             while (sc && sc !== document.body) {
               const s = getComputedStyle(sc);
               if (s.overflowY === 'auto' || s.overflowY === 'scroll') break;
               sc = sc.parentElement;
             }
-            if (sc && sc !== document.body) sc.scrollTop += rect.bottom - vvH + 30;
+            if (sc && sc !== document.body) sc.scrollTop += rect.bottom - vvH + clearance + 8;
           }
         }, 150);
       }
