@@ -1037,11 +1037,12 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
     }
     if (_expAxis !== 'h') return;
 
+    e.preventDefault(); // prevent native scroll once horizontal axis is committed
     overlay.style.transform = `translateX(calc(-50% + ${dx}px))`;
     if (_ghostPrev) _ghostPrev.style.transform = `translateX(calc(-150% + ${dx}px))`;
     if (_ghostNext) _ghostNext.style.transform = `translateX(calc(50% + ${dx}px))`;
     if (adx >= SWIPE_HINT_PX) _showSwipeHint(dx < 0 ? 'left' : 'right', 'expanded');
-  }, { passive: true });
+  }, { passive: false });
 
   const _handleExpEnd = dx => {
     _showSwipeHint(null, 'expanded');
@@ -3247,10 +3248,13 @@ async function init() {
   }
 
   function _buildMonthGhost(direction) {
-    const weekStart = navigateMonth(state.currentWeekStart, direction, state.data.settings.weekStart);
-    const days      = getDaysOfWeek(weekStart);
-    const ws        = state.data.settings.weekStart;
-    const rect      = gridWithSides.getBoundingClientRect();
+    const ws  = state.data.settings.weekStart;
+    const mid = getDaysOfWeek(state.currentWeekStart)[3];
+    let weekStart = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + direction, 1), ws);
+    if (weekStart.getTime() === state.currentWeekStart.getTime())
+      weekStart = getWeekStart(new Date(mid.getFullYear(), mid.getMonth() + direction * 2, 1), ws);
+    const days = getDaysOfWeek(weekStart);
+    const rect = gridWithSides.getBoundingClientRect();
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText = [
@@ -3306,8 +3310,8 @@ async function init() {
     onLongPress:  dateKey => { _suppressNextCardClick = true; openQuickActions(dateKey); },
     onSwipeLeft:  () => nextWeek(),
     onSwipeRight: () => prevWeek(),
-    onSwipeUp:    () => nextMonth(),
-    onSwipeDown:  () => prevMonth(),
+    onSwipeUp:    () => nextMonthFirst(),
+    onSwipeDown:  () => prevMonthFirst(),
     onHint:       dir => _showSwipeHint(dir, 'week'),
     onDragStart:  () => {
       _prevWeekGhost = _buildWeekGhost(-1);
