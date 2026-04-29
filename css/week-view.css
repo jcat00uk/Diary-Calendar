@@ -42,14 +42,22 @@
 .nav-arrow--bottom {
   height: 36px;
   flex-direction: row;
-  padding: 0 12px;
+  padding: 0 10px;
   border-left: none;
   border-right: none;
   touch-action: pan-x;
+  justify-content: space-between;
 }
 
 .nav-arrow--top  { border-top: none; }
 .nav-arrow--bottom { border-bottom: none; }
+
+/* Centre the month label text between the two far-edge arrows */
+.nav-arrow--top span,
+.nav-arrow--bottom span {
+  flex: 1;
+  text-align: center;
+}
 
 .nav-arrow .icon {
   width: 12px;

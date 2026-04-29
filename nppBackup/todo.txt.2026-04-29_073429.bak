@@ -267,39 +267,3 @@ The goal is to eliminate gesture conflicts while keeping navigation intuitive an
 6.  numbers and bulletpoints are obscured by the left hand button. 
 7. when typing the text is blocked by the keyboard, the page should scroll so text isn't obscured, 
 can you discuss my solution to the swipe issues, do u have any qs
-
-------------------
-
-I have a Capacitor Android app. The app's WebView respects the Android system "Font size" accessibility setting, which causes text inside contenteditable elements to render at a scaled size that breaks CSS background-line alignment.
-
-Fix: in MainActivity.java, override onCreate to lock the WebView text zoom to 100% so the system font size setting has no effect inside the app.
-
-Find MainActivity.java (it will be under android/app/src/main/java/<package>/MainActivity.java). It likely currently extends BridgeActivity with an empty body. Add an onCreate override that calls super.onCreate(savedInstanceState) first, then this.bridge.getWebView().getSettings().setTextZoom(100). Add any required imports (android.os.Bundle). Do not change anything else.
-
--------------------------
-
-To remove the lines — two small edits, one in each CSS file:
-
-Read s:\Coding\Diary Calendar\css\day-card.css (lines 267-296)
-Read s:\Coding\Diary Calendar\css\expanded-day.css (lines 237-266)
-If you need to remove the lines, these are the two edits — I'll show them but not apply them yet since you're trying the native fix first:
-
-css/day-card.css — remove 3 lines from .diary-area:
-
-
-  /* Lined paper — background-attachment: local scrolls lines WITH the text */
-  background-image: repeating-linear-gradient(...);
-  background-position: 0 var(--diary-padding-top);
-  background-attachment: local;
-css/expanded-day.css — remove 3 lines from .expanded-diary-area:
-
-
-  background-image: repeating-linear-gradient(...);
-  background-position: 0 0;
-  background-attachment: local;
-The line-height, --line-height-diary, and all the padding stays — text spacing remains consistent, it just won't have the ruled background. Say the word and I'll apply both edits.
-
-----------------------------
-
-
-
