@@ -32,8 +32,9 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  /* Diary lined-paper metrics — must stay in sync with diary text line-height */
-  --line-height-diary: 22px;
+  /* Diary text size + lined-paper metrics (both updated together by applyDiaryFontSize) */
+  --diary-font-size: 13px;
+  --line-height-diary: 21px;
   --diary-padding-top: 6px;
   /* Day card theming */
   --day-card-bg: #EEF4FB;

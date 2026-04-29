@@ -178,6 +178,7 @@ async function loadData() {
   if (!data.series) data.series = [];
   ensureHolidaySettings(data);
   // Ensure theme settings exist
+  if (!data.settings.diaryFontSize)       data.settings.diaryFontSize = 'medium';
   if (!data.settings.uiTheme)             data.settings.uiTheme = 'default';
   if (!data.settings.uiThemeCustomVars)   data.settings.uiThemeCustomVars = { light: {}, dark: {} };
   if (!data.settings.customUIThemes)      data.settings.customUIThemes = [];
@@ -221,6 +222,7 @@ function buildDefaultData() {
       weekStart:           'mon',
       theme:               'light',
       notifications:       true,
+      diaryFontSize:       'medium',
       fyStartMonth:        3,
       fyStartDay:          6,
       agendaBeforeDays:    14,
@@ -268,6 +270,7 @@ function _applyRemoteData(data) {
   markClean();
   applyUITheme(state.data.settings);
   injectEventThemeCSS(state.data.settings);
+  applyDiaryFontSize(state.data.settings.diaryFontSize);
   renderWeekGrid();
   scheduleReminders(state.data);
 }
@@ -395,6 +398,7 @@ function _persistForGCal(data) {
   markClean();
   applyUITheme(data.settings);
   injectEventThemeCSS(data.settings);
+  applyDiaryFontSize(data.settings.diaryFontSize);
   renderWeekGrid();
   scheduleReminders(data);
 }
@@ -417,6 +421,29 @@ function ensureDay(dateKey) {
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────────
+
+const DIARY_SIZES = { small: 11, medium: 13, large: 16 };
+
+function applyDiaryFontSize(size) {
+  const px = DIARY_SIZES[size] ?? DIARY_SIZES.medium;
+  document.documentElement.style.setProperty('--diary-font-size', `${px}px`);
+  // Probe the actual rendered font height so --line-height-diary matches even
+  // when Android system font scaling overrides the CSS font-size value.
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;top:-9999px;left:-9999px;' +
+    `font-size:${px}px;line-height:1;white-space:nowrap;` +
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif';
+  probe.textContent = 'Mg';
+  document.body.appendChild(probe);
+  const fontH = probe.getBoundingClientRect().height;
+  probe.remove();
+  if (fontH > 0) {
+    document.documentElement.style.setProperty(
+      '--line-height-diary', `${Math.ceil(fontH * 1.6)}px`
+    );
+  }
+}
 
 function applyTheme(theme) {
   state.data.settings.theme = theme;
@@ -2010,7 +2037,7 @@ function openSettingsDropdown() {
   history.pushState({ chronicle: 'modal', modal: 'settings' }, '');
 
   const { theme, weekStart, notifications, gdrive, fyStartMonth = 3, fyStartDay = 6,
-          agendaBeforeDays = 14, agendaAheadDays = 60,
+          agendaBeforeDays = 14, agendaAheadDays = 60, diaryFontSize = 'medium',
           holidays: holidaySettings = { enabled: true, hidden: [] } } = state.data.settings;
   const lastSyncStr = gdrive.lastSync
     ? STRINGS.lastSync.replace('{t}', new Date(gdrive.lastSync).toLocaleString())
@@ -2072,6 +2099,14 @@ function openSettingsDropdown() {
             <div class="toggle-pill">
               <div class="toggle-pill-btn ${theme === 'light' ? 'active' : ''}" data-theme="light">Light</div>
               <div class="toggle-pill-btn ${theme === 'dark'  ? 'active' : ''}" data-theme="dark">Dark</div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">Diary text size</div>
+            <div class="toggle-pill">
+              <div class="toggle-pill-btn ${diaryFontSize === 'small'  ? 'active' : ''}" data-diary-size="small">S</div>
+              <div class="toggle-pill-btn ${diaryFontSize === 'medium' ? 'active' : ''}" data-diary-size="medium">M</div>
+              <div class="toggle-pill-btn ${diaryFontSize === 'large'  ? 'active' : ''}" data-diary-size="large">L</div>
             </div>
           </div>
           <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px">
@@ -2239,6 +2274,16 @@ function openSettingsDropdown() {
       applyUITheme(state.data.settings);
       saveData();
       dropdown.querySelectorAll('[data-swatch-theme]').forEach(s => s.classList.toggle('active', s === swatch));
+    });
+  });
+
+  dropdown.querySelectorAll('[data-diary-size]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const size = btn.dataset.diarySize;
+      state.data.settings.diaryFontSize = size;
+      applyDiaryFontSize(size);
+      saveData();
+      dropdown.querySelectorAll('[data-diary-size]').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
 
@@ -3127,6 +3172,7 @@ async function init() {
 
   applyUITheme(state.data.settings);
   injectEventThemeCSS(state.data.settings);
+  applyDiaryFontSize(state.data.settings.diaryFontSize);
   scheduleReminders(state.data);
   initFormatToolbar(); // global format toolbar singleton (Fix 4)
 

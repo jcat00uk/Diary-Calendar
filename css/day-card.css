@@ -271,7 +271,7 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: var(--diary-padding-top) 8px 6px;
-  font-size: 12px;
+  font-size: var(--diary-font-size);
   color: var(--text-primary);
   line-height: var(--line-height-diary);
   outline: none;
@@ -315,7 +315,7 @@
 .diary-area blockquote {
   line-height: var(--line-height-diary) !important;
   margin: 0 !important;
-  font-size: 12px !important;
+  font-size: var(--diary-font-size) !important;
 }
 
 .diary-area span, .diary-area b, .diary-area strong,
