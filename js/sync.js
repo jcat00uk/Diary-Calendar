@@ -138,20 +138,39 @@ export async function signIn() {
       const SocialLogin = window.Capacitor.Plugins.SocialLogin;
       await SocialLogin.initialize({ google: { webClientId: _clientId } });
       _toastCallback?.('Opening Google Sign-In…');
-      const result = await SocialLogin.login({
-        provider: 'google',
-        options: {
-          scopes: [
-            'https://www.googleapis.com/auth/drive.appdata',
-            'https://www.googleapis.com/auth/calendar',
-            'email',
-            'profile',
-          ],
-        },
-      });
-      const token = result?.result?.accessToken?.token;
-      if (!token) throw new Error('No access token returned');
-      await handleNativeToken(token, 3600);
+
+      const _doNativeLogin = async () => {
+        const result = await SocialLogin.login({
+          provider: 'google',
+          options: {
+            scopes: [
+              'https://www.googleapis.com/auth/drive.appdata',
+              'https://www.googleapis.com/auth/calendar',
+              'email',
+              'profile',
+            ],
+          },
+        });
+        const token = result?.result?.accessToken?.token;
+        if (!token) throw new Error('No access token returned');
+        return token;
+      };
+
+      let token = await _doNativeLogin();
+      try {
+        await handleNativeToken(token, 3600);
+      } catch (tokenErr) {
+        if (tokenErr.message === 'invalid_token') {
+          // SocialLogin returned a stale cached token — sign out to flush the cache,
+          // then sign back in to get a fresh one
+          try { await SocialLogin.logout({ provider: 'google' }); } catch {}
+          await SocialLogin.initialize({ google: { webClientId: _clientId } });
+          token = await _doNativeLogin();
+          await handleNativeToken(token, 3600);
+        } else {
+          throw tokenErr;
+        }
+      }
       _toastCallback?.('Signed in successfully');
     } catch (err) {
       console.error('[Chronicle signIn native]', err);
@@ -246,24 +265,36 @@ export async function restoreToken() {
 }
 
 export async function handleNativeToken(accessToken, expiresIn = 3600) {
-  gdriveState.token          = accessToken;
-  gdriveState.tokenExpiresAt = Date.now() + expiresIn * 1000;
-
-  if (_isNativePlatform()) {
-    _persistToken(accessToken, gdriveState.tokenExpiresAt);
-  }
-
   const saved = localStorage.getItem('chronicle_userEmail');
   try {
-    const info  = await fetch(
+    const info = await fetch(
       'https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + accessToken
     ).then(r => r.json());
+
+    if (info.error) {
+      // SocialLogin returned a stale/expired cached token — reject it
+      _clearPersistedToken();
+      throw new Error('invalid_token');
+    }
+
+    // Use actual remaining lifetime reported by Google if available
+    const actualExpiry = parseInt(info.expires_in) || expiresIn;
+    gdriveState.token          = accessToken;
+    gdriveState.tokenExpiresAt = Date.now() + actualExpiry * 1000;
+
+    if (_isNativePlatform()) _persistToken(accessToken, gdriveState.tokenExpiresAt);
+
     const email = info.email || saved || 'Signed in';
     localStorage.setItem('chronicle_userEmail',    email);
     localStorage.setItem('chronicle_hasConsented', '1');
     localStorage.setItem(CONSENTED_SCOPE_KEY,      GDRIVE_SCOPE);
     gdriveState.userEmail = email;
-  } catch {
+  } catch (e) {
+    if (e.message === 'invalid_token') throw e;
+    // Network error reaching tokeninfo — proceed with the token, will surface on API call
+    gdriveState.token          = accessToken;
+    gdriveState.tokenExpiresAt = Date.now() + expiresIn * 1000;
+    if (_isNativePlatform()) _persistToken(accessToken, gdriveState.tokenExpiresAt);
     gdriveState.userEmail = saved || 'Signed in';
   }
 
