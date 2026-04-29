@@ -3221,30 +3221,18 @@ async function init() {
   _navDimEl.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;z-index:2;pointer-events:none';
   document.body.appendChild(_navDimEl);
 
-  // Center vertical swipe-zone indicator (month navigation, visual only)
-  const centerStripEl = document.createElement('div');
-  centerStripEl.className = 'swipe-zone-center';
-  gridWithSides.appendChild(centerStripEl);
-
   // ── Swipe zone glow handlers ──────────────────────────────────
-  const navTopEl = document.getElementById('navPrevWeek');
-  const navBotEl = document.getElementById('navNextWeek');
+  const navTopEl   = document.getElementById('navPrevWeek');
+  const navBotEl   = document.getElementById('navNextWeek');
+  const navLeftEl  = document.getElementById('navPrevMonth');
+  const navRightEl = document.getElementById('navNextMonth');
 
+  // Horizontal strip glow: fire on any touch (strip is only used for h-swipe or click)
   [navTopEl, navBotEl].forEach(el => {
     el.addEventListener('touchstart', () => el.classList.add('swipe-zone-active'),    { passive: true });
     el.addEventListener('touchend',   () => el.classList.remove('swipe-zone-active'), { passive: true });
     el.addEventListener('touchcancel',() => el.classList.remove('swipe-zone-active'), { passive: true });
   });
-
-  weekGrid.addEventListener('touchstart', e => {
-    const x = e.touches[0].clientX;
-    const r = weekGrid.getBoundingClientRect();
-    if (Math.abs(x - (r.left + r.width / 2)) <= 30) {
-      centerStripEl.classList.add('swipe-zone-active');
-    }
-  }, { passive: true });
-  weekGrid.addEventListener('touchend',    () => centerStripEl.classList.remove('swipe-zone-active'), { passive: true });
-  weekGrid.addEventListener('touchcancel', () => centerStripEl.classList.remove('swipe-zone-active'), { passive: true });
 
   let _prevWeekGhost = null, _nextWeekGhost = null;
   let _prevMonthGhost = null, _nextMonthGhost = null;
@@ -3415,6 +3403,8 @@ async function init() {
       }, Math.round(dur * 0.4));
     },
     onDragStartV: () => {
+      navLeftEl.classList.add('swipe-zone-active');
+      navRightEl.classList.add('swipe-zone-active');
       _prevMonthGhost = _buildMonthGhost(-1);
       _nextMonthGhost = _buildMonthGhost(+1);
     },
@@ -3430,6 +3420,8 @@ async function init() {
       });
     },
     onDragEndV: () => {
+      navLeftEl.classList.remove('swipe-zone-active');
+      navRightEl.classList.remove('swipe-zone-active');
       _prevMonthGhost?.remove(); _prevMonthGhost = null;
       _nextMonthGhost?.remove(); _nextMonthGhost = null;
     },
@@ -3443,9 +3435,11 @@ async function init() {
       const inTopStrip = sy >= tr.top && sy <= tr.bottom;
       const inBotStrip = sy >= br.top && sy <= br.bottom;
       if (axis === 'h') return inTopStrip || inBotStrip;
-      // Vertical axis: only from center strip, never from horizontal nav strips
-      const gr = weekGrid.getBoundingClientRect();
-      return Math.abs(sx - (gr.left + gr.width / 2)) <= 30 && !inTopStrip && !inBotStrip;
+      // Vertical axis: only from left or right side nav buttons, never from top/bottom strips
+      const lr = navLeftEl.getBoundingClientRect();
+      const rr = navRightEl.getBoundingClientRect();
+      return ((sx >= lr.left && sx <= lr.right) || (sx >= rr.left && sx <= rr.right))
+          && !inTopStrip && !inBotStrip;
     },
   });
 

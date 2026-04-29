@@ -75,6 +75,7 @@
   border-top: none;
   border-bottom: none;
   overflow: hidden;
+  position: relative;
 }
 
 .nav-arrow--left  { border-left: none; }
@@ -238,44 +239,31 @@
   transition: none;
 }
 
-/* ── Center vertical swipe zone (month nav) ───────────────── */
+/* ── Vertical swipe hints on side nav buttons (month navigation) ── */
 
-.swipe-zone-center {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 3px;
-  background: rgba(55,138,221,0.13);
-  z-index: 3;
-  pointer-events: none;
-  border-radius: 2px;
-  overflow: visible;
-  transition: background 0.15s, box-shadow 0.15s;
-}
-
-/* ↑ ↓ arrows centred on the strip */
-.swipe-zone-center::before,
-.swipe-zone-center::after {
+.nav-v-hint {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: 8px;
   line-height: 1;
-  color: rgba(55,138,221,0.45);
-  transition: color 0.15s;
+  color: var(--text-tertiary);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.swipe-zone-center::before { content: '↑'; top: calc(50% - 14px); }
-.swipe-zone-center::after  { content: '↓'; top: calc(50% + 4px);  }
 
-.swipe-zone-center.swipe-zone-active {
-  background: rgba(55,138,221,0.38);
-  box-shadow: 0 0 10px rgba(55,138,221,0.40);
+.nav-v-hint--top    { top: 4px; }
+.nav-v-hint--bottom { bottom: 4px; }
+
+/* ── Glow when a vertical (month) swipe is active ─────────── */
+
+.nav-arrow--left.swipe-zone-active,
+.nav-arrow--right.swipe-zone-active {
+  background: rgba(55,138,221,0.18);
+  box-shadow: inset 0 0 18px rgba(55,138,221,0.35);
+  color: rgba(55,138,221,0.85);
   transition: none;
-}
-.swipe-zone-center.swipe-zone-active::before,
-.swipe-zone-center.swipe-zone-active::after {
-  color: rgba(55,138,221,0.80);
 }
 

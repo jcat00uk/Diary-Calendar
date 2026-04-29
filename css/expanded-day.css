@@ -282,15 +282,15 @@
 .expanded-diary-area div,
 .expanded-diary-area li,
 .expanded-diary-area blockquote {
-  line-height: var(--line-height-diary);
-  margin: 0;
-  font-size: 14px;
+  line-height: var(--line-height-diary) !important;
+  margin: 0 !important;
+  font-size: 14px !important;
 }
 
 .expanded-diary-area span, .expanded-diary-area b, .expanded-diary-area strong,
 .expanded-diary-area i, .expanded-diary-area em, .expanded-diary-area a {
-  line-height: inherit;
-  font-size: inherit;
+  line-height: inherit !important;
+  font-size: inherit !important;
 }
 
 /* ── Expanded view day-navigation strips (top & bottom) ──────── */

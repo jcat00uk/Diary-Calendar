@@ -307,21 +307,21 @@
   margin: 0;
 }
 
-/* Force every element in the diary to exact line metrics so text stays
-   on the ruled lines in Android WebView / Capacitor */
+/* Force exact line metrics in Android WebView / Capacitor.
+   !important overrides any styles the WebView injects into contenteditable children. */
 .diary-area p,
 .diary-area div,
 .diary-area li,
 .diary-area blockquote {
-  line-height: var(--line-height-diary);
-  margin: 0;
-  font-size: 12px;
+  line-height: var(--line-height-diary) !important;
+  margin: 0 !important;
+  font-size: 12px !important;
 }
 
 .diary-area span, .diary-area b, .diary-area strong,
 .diary-area i, .diary-area em, .diary-area a {
-  line-height: inherit;
-  font-size: inherit;
+  line-height: inherit !important;
+  font-size: inherit !important;
 }
 
 /* ── Format toolbar — fixed bottom ribbon, shows on diary focus ─ */
