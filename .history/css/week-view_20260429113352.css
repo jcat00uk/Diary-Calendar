@@ -178,7 +178,6 @@
 }
 
 .multiday-bar {
-
   position: absolute;
   display: flex;
   align-items: center;
@@ -204,11 +203,10 @@
 
 .multiday-bar-label {
   padding: 0 6px;
-   font-family: 'Inter', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 600; /* Semibold */
   font-size: var(--diary-font-size);
-  color: #fff;
-  overflow: hidden;
+   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;

@@ -1181,10 +1181,6 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   }
 }
 
-function stripHtml(str) {
-  return (str || '').replace(/<[^>]*>/g, '');
-}
-
 
 function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
@@ -1233,7 +1229,7 @@ function renderExpandedEvents(overlay, dateKey) {
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
     const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
-
+sanitizeDiaryHTML(evt.title)
     return `
       <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
 
@@ -1241,7 +1237,7 @@ function renderExpandedEvents(overlay, dateKey) {
 
         <div class="expanded-event-content">
         
-         <div class="expanded-event-title">${esc(stripHtml(evt.title))}</div>
+          <div class="expanded-event-title">${esc(evt.title)}</div>
           ${evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : ''}
         </div>
 

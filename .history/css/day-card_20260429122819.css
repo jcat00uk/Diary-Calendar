@@ -148,18 +148,6 @@
   -webkit-user-select: none;
 }
 
-.event-detail--theme-default {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.event-detail[class*="event-detail--theme-"] {
-  background: var(--evt-default-bg);
-  color: var(--evt-default-text);
-}
-
-
-
 /* ── Todo checkboxes (inline in events strip) ───────────── */
 
 .todo-item {
@@ -204,8 +192,7 @@
   white-space: nowrap;
   min-width: 0;
   flex: 1;
-  border-color: var(--text-secondary);
-  color: var(--text-secondary);
+  color: var(--accent-green-text);
   cursor: pointer;
 }
 

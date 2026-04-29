@@ -228,16 +228,6 @@
   background: var(--bg-tertiary);
 }
 
-.expanded-event-item[class*="--theme-"] {
-  background: var(--evt-default-bg);
-  color: var(--evt-default-text);
-}
-
-.multiday-bar[class*="--theme-"] {
-  background: var(--evt-default-bg);
-  color: var(--evt-default-text);
-}
-
 .expanded-add-item {
   padding: 10px 14px 12px;
   font-size: 13px;

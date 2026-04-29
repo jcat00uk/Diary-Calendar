@@ -643,7 +643,7 @@ function renderMultidayBars() {
       const r2 = barEndsThisWeek   ? '6px' : '0';
 
       const bar = document.createElement('div');
-      bar.className = `multiday-bar${evt.theme ? ` multiday-bar--theme-${evt.theme}` : ''}`;
+      bar.className = 'multiday-bar';
       bar.dataset.evtId    = evt.id;
       bar.dataset.startKey = startKey;
       bar.style.cssText = `top:${barTop}px;left:${firstR.left + 4}px;` +
@@ -1181,11 +1181,6 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   }
 }
 
-function stripHtml(str) {
-  return (str || '').replace(/<[^>]*>/g, '');
-}
-
-
 function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
   if (!list) return;
@@ -1204,7 +1199,6 @@ function renderExpandedEvents(overlay, dateKey) {
             <div class="expanded-event-item expanded-event-item--readonly">
               ${dot}
               <div class="expanded-event-content">
-             
                 <div class="expanded-event-title">${esc(evt.title)}</div>
                 ${time}
               </div>
@@ -1232,21 +1226,14 @@ function renderExpandedEvents(overlay, dateKey) {
 
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
-    const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
-
-    return `
-      <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
-
-        <div class="expanded-event-dot"></div>
-
-        <div class="expanded-event-content">
-        
-         <div class="expanded-event-title">${esc(stripHtml(evt.title))}</div>
-          ${evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : ''}
-        </div>
-
-      </div>
-    
+        const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
+        return `
+          <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
+            <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
+            <div class="expanded-event-content">
+              <div class="expanded-event-title">${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}</div>
+              ${time}
+            </div>
             <div class="expanded-item-actions">
               ${bell}
               <button class="expanded-event-edit"   data-edit="${esc(evt.id)}"   aria-label="Edit">Edit</button>
@@ -3003,10 +2990,6 @@ function stripHTML(html) {
 }
 
 function sanitizeDiaryHTML(html) {
-  html = html.replace(
-  /<font\s+color=["']?([^"'>\s]+)["']?[^>]*>(.*?)<\/font>/gi,
-  '<span style="color:$1">$2</span>'
-);
   if (!html || typeof html !== 'string') return '';
   const ALLOWED_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','P','DIV',
     'SPAN','A','H1','H2','H3','UL','OL','LI','MARK']);

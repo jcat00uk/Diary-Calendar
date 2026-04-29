@@ -106,8 +106,6 @@
 }
 
 .event-pill {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
   display: flex;
   align-items: center;
   padding: 1px 5px;
@@ -125,7 +123,8 @@
 }
 
 .event-pill--event {
-
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue-text);
 }
 
 
@@ -147,18 +146,6 @@
   user-select: none;
   -webkit-user-select: none;
 }
-
-.event-detail--theme-default {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.event-detail[class*="event-detail--theme-"] {
-  background: var(--evt-default-bg);
-  color: var(--evt-default-text);
-}
-
-
 
 /* ── Todo checkboxes (inline in events strip) ───────────── */
 
@@ -204,8 +191,7 @@
   white-space: nowrap;
   min-width: 0;
   flex: 1;
-  border-color: var(--text-secondary);
-  color: var(--text-secondary);
+  color: var(--accent-green-text);
   cursor: pointer;
 }
 

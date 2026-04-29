@@ -1181,10 +1181,15 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   }
 }
 
-function stripHtml(str) {
-  return (str || '').replace(/<[^>]*>/g, '');
-}
+function cleanEventText(html) {
+  if (!html) return '';
 
+  return stripHTML(
+    html
+      .replace(/<font[^>]*>/gi, '')
+      .replace(/<\/font>/gi, '')
+  );
+}
 
 function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
@@ -1204,7 +1209,6 @@ function renderExpandedEvents(overlay, dateKey) {
             <div class="expanded-event-item expanded-event-item--readonly">
               ${dot}
               <div class="expanded-event-content">
-             
                 <div class="expanded-event-title">${esc(evt.title)}</div>
                 ${time}
               </div>
@@ -1240,8 +1244,7 @@ function renderExpandedEvents(overlay, dateKey) {
         <div class="expanded-event-dot"></div>
 
         <div class="expanded-event-content">
-        
-         <div class="expanded-event-title">${esc(stripHtml(evt.title))}</div>
+          <div class="expanded-event-title">${esc(evt.title)}</div>
           ${evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : ''}
         </div>
 
@@ -3003,10 +3006,6 @@ function stripHTML(html) {
 }
 
 function sanitizeDiaryHTML(html) {
-  html = html.replace(
-  /<font\s+color=["']?([^"'>\s]+)["']?[^>]*>(.*?)<\/font>/gi,
-  '<span style="color:$1">$2</span>'
-);
   if (!html || typeof html !== 'string') return '';
   const ALLOWED_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','P','DIV',
     'SPAN','A','H1','H2','H3','UL','OL','LI','MARK']);

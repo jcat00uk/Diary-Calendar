@@ -165,8 +165,6 @@ export function injectEventThemeCSS(settings) {
     rules += `.agenda-item--theme-${t.id} .agenda-item__icon{background:${bg};color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__title{color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__date{color:${txt};opacity:0.7}\n`;
-    rules += `.expanded-event-item.expanded-event-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
-
   }
 
   const css = rootVars + '}\n' + darkVars + '}\n' + rules;

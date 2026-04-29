@@ -653,7 +653,8 @@ function renderMultidayBars() {
       if (barStartsThisWeek) {
         const labelEl = document.createElement('span');
         labelEl.className = 'multiday-bar-label';
-        labelEl.innerHTML = sanitizeDiaryHTML(evt.title);
+        labelEl.textContent = evt.title;
+     if (evt.color) labelEl.style.color = evt.color;
         bar.appendChild(labelEl);
       }
       overlay.appendChild(bar);
@@ -1181,10 +1182,6 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   }
 }
 
-function stripHtml(str) {
-  return (str || '').replace(/<[^>]*>/g, '');
-}
-
 
 function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
@@ -1204,7 +1201,6 @@ function renderExpandedEvents(overlay, dateKey) {
             <div class="expanded-event-item expanded-event-item--readonly">
               ${dot}
               <div class="expanded-event-content">
-             
                 <div class="expanded-event-title">${esc(evt.title)}</div>
                 ${time}
               </div>
@@ -1240,8 +1236,7 @@ function renderExpandedEvents(overlay, dateKey) {
         <div class="expanded-event-dot"></div>
 
         <div class="expanded-event-content">
-        
-         <div class="expanded-event-title">${esc(stripHtml(evt.title))}</div>
+          <div class="expanded-event-title">${esc(evt.title)}</div>
           ${evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : ''}
         </div>
 

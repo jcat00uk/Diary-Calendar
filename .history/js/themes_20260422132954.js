@@ -17,7 +17,7 @@ function _v(bgP, bgS, bgT, dcB, dcW, dhB, dhW, tP, tS, tTer, toB, toT) {
 export const BUILTIN_UI_THEMES = [
   {
     id: 'default', name: 'Default', swatch: '#378ADD', builtin: true,
-    light: _v('#ffffff','#f7f6f3','#f0efe9','#ffffff','#F3F7FB','#a4e3ff','#d5e4f0','#1a1a18','#6b6a66','#a8a79f','#378ADD','#185FA5'),
+    light: _v('#ffffff','#f7f6f3','#f0efe9','#EEF4FB','#F3F7FB','#cfdff2','#d5e4f0','#1a1a18','#6b6a66','#a8a79f','#378ADD','#185FA5'),
     dark:  _v('#1a1a18','#242420','#2c2c28','#1a2230','#161d28','#1e2d42','#1a2840','#f0efe9','#a8a79f','#6b6a66','#378ADD','#4d9fe0'),
   },
   {
@@ -165,8 +165,6 @@ export function injectEventThemeCSS(settings) {
     rules += `.agenda-item--theme-${t.id} .agenda-item__icon{background:${bg};color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__title{color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__date{color:${txt};opacity:0.7}\n`;
-    rules += `.expanded-event-item.expanded-event-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
-
   }
 
   const css = rootVars + '}\n' + darkVars + '}\n' + rules;

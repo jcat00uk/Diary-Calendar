@@ -227,7 +227,7 @@ function buildDefaultData() {
       fyStartDay:          6,
       agendaBeforeDays:    14,
       agendaAheadDays:     60,
-      gdrive:              { enabled: true, lastSync: null },
+      gdrive:              { enabled: false, lastSync: null },
       googleAuth:          { enabled: false, clientId: '', connectedEmail: '' },
       googleCalendars:     [],
       lastFullSync:        null,
@@ -643,7 +643,7 @@ function renderMultidayBars() {
       const r2 = barEndsThisWeek   ? '6px' : '0';
 
       const bar = document.createElement('div');
-      bar.className = `multiday-bar${evt.theme ? ` multiday-bar--theme-${evt.theme}` : ''}`;
+      bar.className = 'multiday-bar';
       bar.dataset.evtId    = evt.id;
       bar.dataset.startKey = startKey;
       bar.style.cssText = `top:${barTop}px;left:${firstR.left + 4}px;` +
@@ -838,8 +838,7 @@ function refreshCardEvents(dateKey) {
       ? `<span class="pill-reminder" aria-label="Reminder set">🔔</span>` : '';
     const repeat   = evt.isOccurrence
       ? `<span class="pill-repeat" aria-label="Recurring">↻</span>` : '';
-    const themeClass = evt.theme ? ` event-pill--theme-${evt.theme}` : '';
-    return `<div class="event-pill${themeClass}"
+    return `<div class="event-pill event-pill--${esc(evt.type)}${themePillClass(evt.theme)}"
                  data-id="${esc(evt.id)}" data-date="${esc(dateKey)}">
       <span class="event-pill-text">${timeStr}${evt.title}</span>${bell}${repeat}
     </div>`;
@@ -1181,11 +1180,6 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
   }
 }
 
-function stripHtml(str) {
-  return (str || '').replace(/<[^>]*>/g, '');
-}
-
-
 function renderExpandedEvents(overlay, dateKey) {
   const list = overlay.querySelector('#expandedEventList');
   if (!list) return;
@@ -1204,7 +1198,6 @@ function renderExpandedEvents(overlay, dateKey) {
             <div class="expanded-event-item expanded-event-item--readonly">
               ${dot}
               <div class="expanded-event-content">
-             
                 <div class="expanded-event-title">${esc(evt.title)}</div>
                 ${time}
               </div>
@@ -1232,21 +1225,14 @@ function renderExpandedEvents(overlay, dateKey) {
 
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';
-    const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
-
-    return `
-      <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
-
-        <div class="expanded-event-dot"></div>
-
-        <div class="expanded-event-content">
-        
-         <div class="expanded-event-title">${esc(stripHtml(evt.title))}</div>
-          ${evt.time ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : ''}
-        </div>
-
-      </div>
-    
+        const expandedTheme = evt.theme ? ` expanded-event-item--theme-${evt.theme}` : '';
+        return `
+          <div class="expanded-event-item${expandedTheme}" data-id="${esc(evt.id)}">
+            <div class="expanded-event-dot expanded-event-dot--${esc(evt.type)}"></div>
+            <div class="expanded-event-content">
+              <div class="expanded-event-title">${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}</div>
+              ${time}
+            </div>
             <div class="expanded-item-actions">
               ${bell}
               <button class="expanded-event-edit"   data-edit="${esc(evt.id)}"   aria-label="Edit">Edit</button>
@@ -3003,10 +2989,6 @@ function stripHTML(html) {
 }
 
 function sanitizeDiaryHTML(html) {
-  html = html.replace(
-  /<font\s+color=["']?([^"'>\s]+)["']?[^>]*>(.*?)<\/font>/gi,
-  '<span style="color:$1">$2</span>'
-);
   if (!html || typeof html !== 'string') return '';
   const ALLOWED_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','P','DIV',
     'SPAN','A','H1','H2','H3','UL','OL','LI','MARK']);
@@ -3248,8 +3230,6 @@ async function init() {
   document.getElementById('btnSync').addEventListener('click', () => {
     if (gdriveState.token) {
       _runFullSync();
-      // Also sync diary notes to Drive — GCal sync only covers events
-      syncNow(state.data, _applyRemoteData, _openConflict, showToast).catch(console.warn);
     } else {
       signIn().catch(console.warn);
     }
@@ -3544,9 +3524,8 @@ async function init() {
     const evt = getEventsForDate(state.data, dateKey).find(ev => ev.id === todoId);
     if (!evt) return;
 
-    const themeClass = evt.theme ? ` event-detail--theme-${evt.theme}` : '';
     const detail = document.createElement('div');
-    detail.className = `event-detail${themeClass}`;
+    detail.className    = 'event-detail';
     detail.dataset.forId = todoId;
     detail.innerHTML = `
       <div class="event-detail__title">${evt.title}</div>
@@ -3645,7 +3624,6 @@ async function init() {
   // ── Delegated: multi-day bar inline detail ──
   gridWithSides.addEventListener('click', e => {
     const bar = e.target.closest('.multiday-bar');
-    
     if (!bar) return;
     e.stopPropagation();
 
@@ -3665,7 +3643,6 @@ async function init() {
     if (!evt) return;
 
     bar.classList.add('multiday-bar--active');
-    bar.classList.add(`multiday-bar--theme-${evt.theme}`);
 
     const barRect  = bar.getBoundingClientRect();
     const gridRect = weekGrid.getBoundingClientRect();
