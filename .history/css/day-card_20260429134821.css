@@ -61,7 +61,7 @@
 .day-name {
   font-family: 'Inter', sans-serif;
   font-weight: 600; /* Semibold */
-  font-size: var(--diary-font-size+1);
+  font-size: var(--diary-font-size);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
