@@ -156,25 +156,16 @@ export async function signIn() {
         return token;
       };
 
-      let token = await _doNativeLogin();
-      try {
-        await handleNativeToken(token, 3600);
-      } catch (tokenErr) {
-        if (tokenErr.message === 'invalid_token') {
-          // SocialLogin returned a stale cached token — sign out to flush the cache,
-          // then sign back in to get a fresh one
-          try { await SocialLogin.logout({ provider: 'google' }); } catch {}
-          await SocialLogin.initialize({ google: { webClientId: _clientId } });
-          token = await _doNativeLogin();
-          await handleNativeToken(token, 3600);
-        } else {
-          throw tokenErr;
-        }
-      }
+      const token = await _doNativeLogin();
+      await handleNativeToken(token, 3600);
       _toastCallback?.('Signed in successfully');
     } catch (err) {
       console.error('[Chronicle signIn native]', err);
-      _toastCallback?.('Sign-in failed: ' + err.message);
+      if (err.message === 'invalid_token') {
+        _toastCallback?.('Session expired — tap Sign Out in Settings, then sign back in');
+      } else {
+        _toastCallback?.('Sign-in failed: ' + err.message);
+      }
     }
     return;
   }
@@ -197,6 +188,11 @@ export function signOut() {
   localStorage.removeItem(CONSENTED_SCOPE_KEY);
   _clearPersistedToken();
   _statusCallback?.('unsigned', null);
+  // Flush the Android Google Sign-In SDK credential cache so the next login()
+  // goes through the full OAuth consent flow rather than returning a stale token
+  if (_isNativePlatform()) {
+    window.Capacitor?.Plugins?.SocialLogin?.logout({ provider: 'google' }).catch(() => {});
+  }
 }
 
 function _isNativePlatform() {
@@ -272,7 +268,12 @@ export async function handleNativeToken(accessToken, expiresIn = 3600) {
     ).then(r => r.json());
 
     if (info.error) {
-      // SocialLogin returned a stale/expired cached token — reject it
+      // Stale or revoked token — reject it
+      _clearPersistedToken();
+      throw new Error('invalid_token');
+    }
+    // Ensure the token actually carries the Drive scope (not just email/profile)
+    if (info.scope && !info.scope.includes('drive')) {
       _clearPersistedToken();
       throw new Error('invalid_token');
     }
