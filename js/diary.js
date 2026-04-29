@@ -60,6 +60,8 @@ export function initDiaryArea(el, getTextFn, setTextFn, opts = {}) {
   el.setAttribute('spellcheck', 'true');
   el.setAttribute('role', 'textbox');
   el.setAttribute('aria-multiline', 'true');
+  // Prefer <br> line breaks over <div>/<p> wrappers (hint for all browsers)
+  try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch (_) {}
 
   // Load existing content — detect legacy plain-text vs stored HTML
   const existing = getTextFn();
@@ -83,9 +85,48 @@ export function initDiaryArea(el, getTextFn, setTextFn, opts = {}) {
         }
       }
       e.preventDefault();
-      document.execCommand('insertLineBreak');
+      // Insert <br> via Range API — more reliable than execCommand in Android WebView
+      const sel2 = window.getSelection();
+      if (sel2 && sel2.rangeCount > 0) {
+        const range = sel2.getRangeAt(0);
+        range.deleteContents();
+        const br = document.createElement('br');
+        range.insertNode(br);
+        // Ensure there is content after the <br> so the cursor has a position
+        if (!br.nextSibling) {
+          br.parentNode.appendChild(document.createElement('br'));
+        }
+        range.setStartAfter(br);
+        range.collapse(true);
+        sel2.removeAllRanges();
+        sel2.addRange(range);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        document.execCommand('insertLineBreak');
+      }
     }
   });
+
+  // Flatten any <div>/<p> direct children that Android WebView inserts instead of <br>
+  const _blockObserver = new MutationObserver(() => {
+    const blocks = [...el.children].filter(
+      c => (c.tagName === 'DIV' && !c.className) || c.tagName === 'P'
+    );
+    if (!blocks.length) return;
+    _blockObserver.disconnect();
+    blocks.forEach((block, i) => {
+      const children = [...block.childNodes];
+      // <div><br></div> is Chrome/WebView's empty-paragraph placeholder — treat as a lone <br>
+      const isSoloBr = children.length === 1 && children[0].nodeName === 'BR';
+      const frag = document.createDocumentFragment();
+      if (i > 0 || block.previousSibling) frag.appendChild(document.createElement('br'));
+      if (!isSoloBr) children.forEach(n => frag.appendChild(n.cloneNode(true)));
+      el.replaceChild(frag, block);
+    });
+    _blockObserver.observe(el, { childList: true, subtree: true });
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  _blockObserver.observe(el, { childList: true, subtree: true });
 
   el.addEventListener('input', () => {
     const html = el.innerHTML;

@@ -184,6 +184,33 @@ function _isNativePlatform() {
   return !!(window.Capacitor?.isNativePlatform?.());
 }
 
+// Silently re-acquire a native token using cached Google credentials (no UI if possible)
+async function _nativeSilentRefresh() {
+  try {
+    const SocialLogin = window.Capacitor?.Plugins?.SocialLogin;
+    if (!SocialLogin || !_clientId) return false;
+    await SocialLogin.initialize({ google: { webClientId: _clientId } });
+    const result = await SocialLogin.login({
+      provider: 'google',
+      options: {
+        scopes: [
+          'https://www.googleapis.com/auth/drive.appdata',
+          'https://www.googleapis.com/auth/calendar',
+          'email', 'profile',
+        ],
+      },
+    });
+    const token = result?.result?.accessToken?.token;
+    if (!token) return false;
+    await handleNativeToken(token, 3600);
+    return true;
+  } catch (e) {
+    console.warn('[Chronicle] Native silent refresh failed:', e.message);
+    _clearPersistedToken();
+    return false;
+  }
+}
+
 async function _persistToken(token, expiresAt) {
   const Prefs = window.Capacitor?.Plugins?.Preferences;
   if (!Prefs) return;
