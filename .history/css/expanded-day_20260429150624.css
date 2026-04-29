@@ -379,7 +379,6 @@
 
 /* ── Expanded todo checklist items ──────────────────────── */
 
-
 .expanded-todo-item {
   
   display: flex;
@@ -423,6 +422,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+    background: var(--bg-secondary);
 }
 
 .expanded-todo-item--done .expanded-todo-label {

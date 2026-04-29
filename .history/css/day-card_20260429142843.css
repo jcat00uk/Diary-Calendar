@@ -183,13 +183,11 @@
   width: 13px;
   height: 13px;
   border-radius: 3px;
-  border: 1.5px solid var(--accent-green-text);
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 8px;
-  color: var(--accent-green-text);
   flex-shrink: 0;
   cursor: pointer;
   padding: 0;
@@ -216,8 +214,8 @@
 }
 
 .todo-item--done .todo-checkbox {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-text);
 }
 
 /* ── Inline event detail card (Fix 13) ──────────────────── */

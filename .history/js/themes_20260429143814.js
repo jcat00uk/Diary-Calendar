@@ -157,9 +157,9 @@ export function injectEventThemeCSS(settings) {
     rules += `.todo-item.todo-item--theme-${t.id} .todo-label{color:${txt}}\n`;
     rules += `.todo-item.todo-item--theme-${t.id} .todo-checkbox{border-color:${txt};color:${txt}}\n`;
     // Expanded day view
-    rules += `.expanded-event-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
-    rules += `.expanded-event-item--theme-${t.id} .expanded-event-dot{background:${txt}}\n`;
-    rules += `.expanded-event-item--theme-${t.id} .expanded-event-title{color:${txt}}\n`;
+    //rules += `.expanded-event-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
+    //rules += `.expanded-event-item--theme-${t.id} .expanded-event-dot{background:${txt}}\n`;
+    //rules += `.expanded-event-item--theme-${t.id} .expanded-event-title{color:${txt}}\n`;
     rules += `.expanded-todo-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
     rules += `.expanded-todo-item--theme-${t.id} .expanded-todo-check{border-color:${txt};color:${txt}}\n`;
     rules += `.expanded-todo-item--theme-${t.id} .expanded-todo-label{color:${txt}}\n`;
@@ -168,7 +168,7 @@ export function injectEventThemeCSS(settings) {
     rules += `.agenda-item--theme-${t.id} .agenda-item__icon{background:${bg};color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__title{color:${txt}}\n`;
     rules += `.agenda-item--theme-${t.id} .agenda-item__date{color:${txt};opacity:0.7}\n`;
-    rules += `.expanded-event-item.expanded-event-item--theme-${t.id}{background:${bg};border-color:${bg}}\n`;
+
  
 
   }

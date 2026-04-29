@@ -1215,27 +1215,21 @@ function renderExpandedEvents(overlay, dateKey) {
         const bell = evt.reminderMinutes != null
           ? `<span class="reminder-icon" title="${evt.reminderMinutes}min reminder">🔔</span>` : '';
 
-    if (evt.type === 'todo') {
-      const todoTheme = evt.theme ? ` expanded-todo-item--theme-${evt.theme}` : '';
-
-      return `
-        <div class="expanded-todo-item ${evt.done ? 'expanded-todo-item--done' : ''}${todoTheme}" data-id="${esc(evt.id)}">
-          <button class="expanded-todo-check ${evt.done ? 'checked' : ''}"
-                  data-check="${esc(evt.id)}" aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">
-            ${evt.done ? '✓' : ''}
-          </button>
-
-          <span class="expanded-todo-label">
-            ${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}
-          </span>
-
-          <div class="expanded-item-actions">
-            ${bell}
-            <button class="expanded-event-edit" data-edit="${esc(evt.id)}" aria-label="Edit">Edit</button>
-            <button class="expanded-event-delete" data-delete="${esc(evt.id)}" aria-label="Delete">✕</button>
-          </div>
-        </div>`;
-    }
+        if (evt.type === 'todo') {
+          return `
+            <div class="expanded-todo-item ${evt.done ? 'expanded-todo-item--done' : ''}" data-id="${esc(evt.id)}">
+              <button class="expanded-todo-check ${evt.done ? 'checked' : ''}"
+                      data-check="${esc(evt.id)}" aria-label="${evt.done ? 'Mark incomplete' : 'Mark complete'}">
+                ${evt.done ? '✓' : ''}
+              </button>
+              <span class="expanded-todo-label">${evt.title}${evt.isOccurrence ? ' <span class="item-repeat">↻</span>' : ''}</span>
+              <div class="expanded-item-actions">
+                ${bell}
+                <button class="expanded-event-edit"   data-edit="${esc(evt.id)}"   aria-label="Edit">Edit</button>
+                <button class="expanded-event-delete" data-delete="${esc(evt.id)}" aria-label="Delete">✕</button>
+              </div>
+            </div>`;
+        }
 
         const time = evt.time
           ? `<div class="expanded-event-time">${esc(evt.time)}</div>` : '';

@@ -189,7 +189,6 @@
   align-items: center;
   justify-content: center;
   font-size: 8px;
-  color: var(--accent-green-text);
   flex-shrink: 0;
   cursor: pointer;
   padding: 0;

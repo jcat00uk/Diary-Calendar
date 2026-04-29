@@ -379,6 +379,10 @@
 
 /* ── Expanded todo checklist items ──────────────────────── */
 
+.expanded-todo-item[class*="--theme-"] {
+  background: var(--evt-default-bg);
+  color: var(--evt-default-text);
+}
 
 .expanded-todo-item {
   
