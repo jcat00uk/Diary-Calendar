@@ -640,9 +640,10 @@ hiApplyBtn._openCustomPicker = () => {
     if (_activeEditable) {
       _activeEditable.focus();
       const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
+      _exec('backColor',
+        current && current.toLowerCase() === c.toLowerCase()
+          ? 'transparent'
+          : c
       );
     }
     _updateActiveStates();
@@ -656,9 +657,10 @@ const openHiPicker = e => {
     if (_activeEditable) {
       _activeEditable.focus();
       const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
+      _exec('backColor',
+        current && current.toLowerCase() === c.toLowerCase()
+          ? 'transparent'
+          : c
       );
     }
     _updateActiveStates();

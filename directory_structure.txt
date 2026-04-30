@@ -1,0 +1,286 @@
+Folder PATH listing for volume Data
+Volume serial number is 5251-1596
+S:.
+|   .editorconfig
+|   build-chronicle.bat
+|   capacitor.config.json
+|   CONTINUATION_PROMPT.md
+|   directory_structure.txt
+|   index.html
+|   README.md
+|   todo.txt
+|   
++---.claude
+|       settings.local.json
+|       
++---.continue
+|   \---agents
++---.history
+|   |   index_20260429112020.html
+|   |   index_20260429112022.html
+|   |   README_20260420170038.md
+|   |   README_20260420174024.md
+|   |   
+|   +---.continue
+|   |   \---agents
+|   |           new-config-3_20260420194805.yaml
+|   |           new-config-3_20260420194814.yaml
+|   |           
+|   +---css
+|   |       day-card_20260429074458.css
+|   |       day-card_20260429103841.css
+|   |       day-card_20260429104339.css
+|   |       day-card_20260429104509.css
+|   |       day-card_20260429104613.css
+|   |       day-card_20260429104643.css
+|   |       day-card_20260429104659.css
+|   |       day-card_20260429104755.css
+|   |       day-card_20260429110920.css
+|   |       day-card_20260429111020.css
+|   |       day-card_20260429111111.css
+|   |       day-card_20260429112727.css
+|   |       day-card_20260429112757.css
+|   |       day-card_20260429113005.css
+|   |       day-card_20260429122819.css
+|   |       day-card_20260429123137.css
+|   |       day-card_20260429134802.css
+|   |       day-card_20260429134821.css
+|   |       day-card_20260429134840.css
+|   |       day-card_20260429142843.css
+|   |       day-card_20260429142917.css
+|   |       day-card_20260429143016.css
+|   |       day-card_20260429150101.css
+|   |       expanded-day_20260429081001.css
+|   |       expanded-day_20260429114945.css
+|   |       expanded-day_20260429115145.css
+|   |       expanded-day_20260429115240.css
+|   |       expanded-day_20260429115337.css
+|   |       expanded-day_20260429115822.css
+|   |       expanded-day_20260429115903.css
+|   |       expanded-day_20260429120228.css
+|   |       expanded-day_20260429120318.css
+|   |       expanded-day_20260429123839.css
+|   |       expanded-day_20260429142558.css
+|   |       expanded-day_20260429143256.css
+|   |       expanded-day_20260429143442.css
+|   |       expanded-day_20260429143513.css
+|   |       expanded-day_20260429145716.css
+|   |       expanded-day_20260429145754.css
+|   |       expanded-day_20260429150540.css
+|   |       expanded-day_20260429150624.css
+|   |       expanded-day_20260429150849.css
+|   |       expanded-day_20260429150923.css
+|   |       expanded-day_20260429151010.css
+|   |       expanded-day_20260429151019.css
+|   |       expanded-day_20260429152013.css
+|   |       modals_20260420221805.css
+|   |       modals_20260421125705.css
+|   |       modals_20260421131518.css
+|   |       modals_20260421131911.css
+|   |       modals_20260421132217.css
+|   |       modals_20260421133011.css
+|   |       modals_20260421133027.css
+|   |       modals_20260421133428.css
+|   |       week-view_20260429110126.css
+|   |       week-view_20260429110130.css
+|   |       week-view_20260429110144.css
+|   |       week-view_20260429112301.css
+|   |       week-view_20260429113159.css
+|   |       week-view_20260429113352.css
+|   |       week-view_20260429113857.css
+|   |       week-view_20260429113952.css
+|   |       week-view_20260429114017.css
+|   |       week-view_20260429114036.css
+|   |       week-view_20260429114142.css
+|   |       week-view_20260429114734.css
+|   |       
+|   \---js
+|           app_20260421094908.js
+|           app_20260421125620.js
+|           app_20260421130213.js
+|           app_20260421130858.js
+|           app_20260421131444.js
+|           app_20260421131906.js
+|           app_20260421132439.js
+|           app_20260421132817.js
+|           app_20260421133106.js
+|           app_20260421135353.js
+|           app_20260421140219.js
+|           app_20260421140322.js
+|           app_20260421140342.js
+|           app_20260421140439.js
+|           app_20260421141243.js
+|           app_20260421142225.js
+|           app_20260421142302.js
+|           app_20260421142435.js
+|           app_20260421142609.js
+|           app_20260421142702.js
+|           app_20260421142806.js
+|           app_20260421142853.js
+|           app_20260421142919.js
+|           app_20260421143114.js
+|           app_20260421143324.js
+|           app_20260421144700.js
+|           app_20260421145226.js
+|           app_20260421145430.js
+|           app_20260421145552.js
+|           app_20260421145751.js
+|           app_20260421145941.js
+|           app_20260421150108.js
+|           app_20260421151452.js
+|           app_20260421152409.js
+|           app_20260421152453.js
+|           app_20260421153007.js
+|           app_20260421153041.js
+|           app_20260421153429.js
+|           app_20260421153613.js
+|           app_20260421153637.js
+|           app_20260421153647.js
+|           app_20260421154301.js
+|           app_20260421154407.js
+|           app_20260421154552.js
+|           app_20260421154847.js
+|           app_20260421155057.js
+|           app_20260421155129.js
+|           app_20260421160406.js
+|           app_20260421160756.js
+|           app_20260421161005.js
+|           app_20260421161019.js
+|           app_20260421161645.js
+|           app_20260421161938.js
+|           app_20260421171242.js
+|           app_20260423145710.js
+|           app_20260424163409.js
+|           app_20260424164555.js
+|           app_20260424172045.js
+|           app_20260429105611.js
+|           app_20260429110219.js
+|           app_20260429110230.js
+|           app_20260429110422.js
+|           app_20260429110436.js
+|           app_20260429123442.js
+|           app_20260429123605.js
+|           app_20260429124450.js
+|           app_20260429125415.js
+|           app_20260429125521.js
+|           app_20260429130120.js
+|           app_20260429130238.js
+|           app_20260429130656.js
+|           app_20260429130802.js
+|           app_20260429131848.js
+|           app_20260429132003.js
+|           app_20260429132044.js
+|           app_20260429132054.js
+|           app_20260429132156.js
+|           app_20260429132238.js
+|           app_20260429132255.js
+|           app_20260429132302.js
+|           app_20260429132330.js
+|           app_20260429132336.js
+|           app_20260429132410.js
+|           app_20260429132423.js
+|           app_20260429132643.js
+|           app_20260429132741.js
+|           app_20260429132842.js
+|           app_20260429132945.js
+|           app_20260429133205.js
+|           app_20260429134535.js
+|           app_20260429144402.js
+|           app_20260429151400.js
+|           events_20260420171113.js
+|           events_20260421141451.js
+|           events_20260421141508.js
+|           events_20260421141722.js
+|           events_20260421141828.js
+|           events_20260421142021.js
+|           events_20260421142037.js
+|           events_20260421142138.js
+|           events_20260421150311.js
+|           events_20260421150332.js
+|           events_20260421161535.js
+|           events_20260421162229.js
+|           events_20260421162626.js
+|           events_20260421162705.js
+|           events_20260421162925.js
+|           events_20260421162948.js
+|           events_20260421163202.js
+|           events_20260421163349.js
+|           events_20260421163416.js
+|           events_20260421163838.js
+|           events_20260421163903.js
+|           events_20260421164216.js
+|           events_20260421164442.js
+|           events_20260421164602.js
+|           events_20260421165218.js
+|           events_20260421165248.js
+|           events_20260421165330.js
+|           events_20260421165518.js
+|           events_20260421165551.js
+|           events_20260421165622.js
+|           events_20260421170247.js
+|           events_20260421171437.js
+|           sync_20260427151106.js
+|           sync_20260427152618.js
+|           sync_20260427153505.js
+|           themes_20260422132954.js
+|           themes_20260429103526.js
+|           themes_20260429125853.js
+|           themes_20260429143814.js
+|           themes_20260429150212.js
+|           themes_20260429150227.js
+|           themes_20260429150337.js
+|           
++---assets
+|       icons.svg
+|       
++---css
+|       agenda.css
+|       base.css
+|       day-card.css
+|       expanded-day.css
+|       modals.css
+|       responsive.css
+|       ribbon.css
+|       themes.css
+|       week-view.css
+|       
++---docs
+|       index.md
+|       rules.md
+|       
++---js
+|       app.js
+|       calendar.js
+|       diary.js
+|       events.js
+|       gestures.js
+|       holidays.js
+|       ical.js
+|       notifications.js
+|       sync.js
+|       themeEditor.js
+|       themes.js
+|       undo.js
+|       
+\---nppBackup
+        build-chronicle.bat.2026-04-27_212312.bak
+        CONTINUATION_PROMPT.md.2026-04-21_095827.bak
+        CONTINUATION_PROMPT.md.2026-04-21_185207.bak
+        CONTINUATION_PROMPT.md.2026-04-21_233618.bak
+        CONTINUATION_PROMPT.md.2026-04-22_185929.bak
+        CONTINUATION_PROMPT.md.2026-04-22_222228.bak
+        CONTINUATION_PROMPT.md.2026-04-23_063930.bak
+        CONTINUATION_PROMPT.md.2026-04-23_063942.bak
+        CONTINUATION_PROMPT.md.2026-04-23_064440.bak
+        CONTINUATION_PROMPT.md.2026-04-23_064932.bak
+        CONTINUATION_PROMPT.md.2026-04-23_070046.bak
+        CONTINUATION_PROMPT.md.2026-04-23_073627.bak
+        CONTINUATION_PROMPT.md.2026-04-23_074905.bak
+        CONTINUATION_PROMPT.md.2026-04-24_172430.bak
+        CONTINUATION_PROMPT.md.2026-04-25_094713.bak
+        todo.txt.2026-04-23_073509.bak
+        todo.txt.2026-04-23_075315.bak
+        todo.txt.2026-04-28_163813.bak
+        todo.txt.2026-04-28_190218.bak
+        todo.txt.2026-04-29_073429.bak
+        

@@ -614,10 +614,11 @@ _compoundApply(
   () => _lastHiColor,
   () => {
     const current = document.queryCommandValue('backColor');
-    if (_isSameColor(current, _lastHiColor)) {
+    const target  = _lastHiColor;
+    if (current && current.toLowerCase() === target.toLowerCase()) {
       return ['backColor', 'transparent'];
     }
-    return ['backColor', _lastHiColor];
+    return ['backColor', target];
   },
   null,
   c => {
@@ -625,9 +626,10 @@ _compoundApply(
     if (_activeEditable) {
       _activeEditable.focus();
       const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
+      _exec('backColor',
+        current && current.toLowerCase() === c.toLowerCase()
+          ? 'transparent'
+          : c
       );
     }
     _updateActiveStates();
@@ -640,9 +642,10 @@ hiApplyBtn._openCustomPicker = () => {
     if (_activeEditable) {
       _activeEditable.focus();
       const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
+      _exec('backColor',
+        current && current.toLowerCase() === c.toLowerCase()
+          ? 'transparent'
+          : c
       );
     }
     _updateActiveStates();
@@ -656,9 +659,10 @@ const openHiPicker = e => {
     if (_activeEditable) {
       _activeEditable.focus();
       const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
+      _exec('backColor',
+        current && current.toLowerCase() === c.toLowerCase()
+          ? 'transparent'
+          : c
       );
     }
     _updateActiveStates();
@@ -667,18 +671,6 @@ const openHiPicker = e => {
 
 hiPickBtn.addEventListener('mousedown', openHiPicker);
 hiPickBtn.addEventListener('touchend', openHiPicker);
-
-function _normalizeColor(c) {
-  if (!c) return '';
-  c = c.trim().toLowerCase();
-  if (c.startsWith('#')) return c;
-  const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!m) return c;
-  return _rgbToHex(+m[1], +m[2], +m[3]).toLowerCase();
-}
-function _isSameColor(a, b) {
-  return _normalizeColor(a) === _normalizeColor(b);
-}
 
   // ── Text colour ──
   function _applyTextColor(c) {

@@ -1,0 +1,69 @@
+# CLAUDE RULES (STRICT)
+
+## RESPONSE MODE
+- DIFF-ONLY by default
+- DO NOT rewrite full files
+- ONLY output changed functions or minimal patches
+
+---
+
+## FILE ACCESS RULES
+- ALWAYS check index.md before doing anything
+- DO NOT explore unrelated files
+- ONLY open:
+  1. The file mentioned in the task
+  2. Files directly referenced by index.md if required
+
+---
+
+## OUTPUT CONSTRAINTS
+- MAX ~100 lines unless explicitly allowed
+- NO explanations unless asked
+- NO reformatting unrelated code
+- PRESERVE existing structure and style
+
+---
+
+## EDITING RULES
+- Modify ONLY the specified function(s)
+- DO NOT rename functions unless required
+- DO NOT break existing APIs
+- DO NOT remove features
+
+---
+
+## DEBUG MODE (when fixing bugs)
+1. Identify likely file using index.md
+2. Inspect ONLY relevant function
+3. Apply minimal fix
+4. STOP
+
+---
+
+## WHEN UNSURE
+- Ask which file/function to modify
+- DO NOT guess across multiple files
+
+---
+
+## PERFORMANCE RULE
+- Prefer smallest possible change
+- Avoid introducing new abstractions unless necessary
+
+---
+
+## CONTEXT USAGE
+- Assume project structure from index.md is correct
+- DO NOT re-analyse entire codebase
+
+---
+
+## SPECIAL FLAGS
+
+If user says:
+- "FULL REWRITE ALLOWED" → you may rewrite file
+- "EXPLAIN" → include explanation
+- "MULTI-FILE OK" → you may touch multiple files
+
+Otherwise:
+→ SINGLE FILE, MINIMAL DIFF ONLY

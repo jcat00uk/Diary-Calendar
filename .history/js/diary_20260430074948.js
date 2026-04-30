@@ -600,35 +600,39 @@ export function initFormatToolbar() {
   }
 
   // ── Highlight ──
-  const hiApplyBtn = _toolbar.querySelector('#fmtHiApply');
-  const hiPickBtn  = _toolbar.querySelector('#fmtHiPick');
+const hiApplyBtn = _toolbar.querySelector('#fmtHiApply');
+const hiPickBtn  = _toolbar.querySelector('#fmtHiPick');
 
-  const _applyHiColor = c => {
-    _addRecentHiColor(c);
-    _lastHiColor = c;
-    _toolbar.querySelector('#fmtHiBar').style.background = c;
-  };
+const _applyHiColor = c => {
+  _addRecentHiColor(c);
+  _lastHiColor = c;
+  _toolbar.querySelector('#fmtHiBar').style.background = c;
+};
+
+// Detect ANY highlight in selection
+function _selectionHasHighlight() {
+  const sel = document.getSelection();
+  if (!sel || !sel.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+  const el = container.nodeType === 1 ? container : container.parentElement;
+  return !!(el && el.closest('[style*="background"]'));
+}
 
 _compoundApply(
   hiApplyBtn,
   () => _lastHiColor,
   () => {
-    const current = document.queryCommandValue('backColor');
-    if (_isSameColor(current, _lastHiColor)) {
-      return ['backColor', 'transparent'];
-    }
-    return ['backColor', _lastHiColor];
+    return _selectionHasHighlight()
+      ? ['backColor', 'transparent']
+      : ['backColor', _lastHiColor];
   },
   null,
   c => {
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      _exec('backColor', _selectionHasHighlight() ? 'transparent' : c);
     }
     _updateActiveStates();
   }
@@ -639,11 +643,7 @@ hiApplyBtn._openCustomPicker = () => {
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      _exec('backColor', _selectionHasHighlight() ? 'transparent' : c);
     }
     _updateActiveStates();
   });
@@ -655,11 +655,7 @@ const openHiPicker = e => {
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      _exec('backColor', _selectionHasHighlight() ? 'transparent' : c);
     }
     _updateActiveStates();
   });

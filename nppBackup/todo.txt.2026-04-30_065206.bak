@@ -301,18 +301,5 @@ The line-height, --line-height-diary, and all the padding stays — text spacing
 
 ----------------------------
 
-From now on:
-- follow task-protocol.md for all tasks
-- use index.md for file routing
-- obey rules.md strictly
-
-TASK: <your request>
-
---------------
-tree /f /a > directory_structure.txt
-
-ps
-
-
 
 

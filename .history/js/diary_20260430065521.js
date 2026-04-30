@@ -609,76 +609,32 @@ export function initFormatToolbar() {
     _toolbar.querySelector('#fmtHiBar').style.background = c;
   };
 
-_compoundApply(
-  hiApplyBtn,
-  () => _lastHiColor,
-  () => {
-    const current = document.queryCommandValue('backColor');
-    if (_isSameColor(current, _lastHiColor)) {
-      return ['backColor', 'transparent'];
-    }
-    return ['backColor', _lastHiColor];
-  },
-  null,
-  c => {
-    _applyHiColor(c);
-    if (_activeEditable) {
-      _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
-    }
-    _updateActiveStates();
-  }
-);
+  _compoundApply(
+    hiApplyBtn,
+    () => _lastHiColor,
+    () => ['backColor', _lastHiColor],
+    null,
+    c => { _applyHiColor(c); _exec('backColor', c); }
+  );
 
-hiApplyBtn._openCustomPicker = () => {
-  _showHiColorPicker(hiApplyBtn, c => {
-    _applyHiColor(c);
-    if (_activeEditable) {
-      _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
-    }
-    _updateActiveStates();
-  });
-};
+  hiApplyBtn._openCustomPicker = () => {
+    _showHiColorPicker(hiApplyBtn, c => {
+      _applyHiColor(c);
+      if (_activeEditable) { _activeEditable.focus(); _exec('backColor', c); }
+      _updateActiveStates();
+    });
+  };
 
-const openHiPicker = e => {
-  e.preventDefault();
-  _showHiColorPicker(hiPickBtn, c => {
-    _applyHiColor(c);
-    if (_activeEditable) {
-      _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
-    }
-    _updateActiveStates();
-  });
-};
-
-hiPickBtn.addEventListener('mousedown', openHiPicker);
-hiPickBtn.addEventListener('touchend', openHiPicker);
-
-function _normalizeColor(c) {
-  if (!c) return '';
-  c = c.trim().toLowerCase();
-  if (c.startsWith('#')) return c;
-  const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!m) return c;
-  return _rgbToHex(+m[1], +m[2], +m[3]).toLowerCase();
-}
-function _isSameColor(a, b) {
-  return _normalizeColor(a) === _normalizeColor(b);
-}
+  const openHiPicker = e => {
+    e.preventDefault();
+    _showHiColorPicker(hiPickBtn, c => {
+      _applyHiColor(c);
+      if (_activeEditable) { _activeEditable.focus(); _exec('backColor', c); }
+      _updateActiveStates();
+    });
+  };
+  hiPickBtn.addEventListener('mousedown', openHiPicker);
+  hiPickBtn.addEventListener('touchend',  openHiPicker);
 
   // ── Text colour ──
   function _applyTextColor(c) {
@@ -686,7 +642,7 @@ function _isSameColor(a, b) {
     _lastTextColor = c;
     _toolbar.querySelector('#fmtClrBar').style.background = c;
     _toolbar.querySelector('#fmtClrLetter').style.color  = c;
-  }
+  } 
 
   _compoundApply(
     _toolbar.querySelector('#fmtClrApply'),

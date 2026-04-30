@@ -1,0 +1,160 @@
+# CLAUDE TASK PROMPT GENERATOR (CHRONICLE)
+
+## PURPOSE
+Convert vague requests into:
+- exact file target
+- exact function (if possible)
+- minimal diff instruction
+- strict execution prompt for Claude
+
+---
+
+## HOW TO USE
+
+You provide:
+
+> TASK: <your issue or feature request>
+
+Then follow output format below.
+
+---
+
+## OUTPUT FORMAT (WHAT THIS GENERATOR PRODUCES)
+
+You will always generate:
+
+### 1. FILE TARGET
+The single most relevant file from index.md
+
+### 2. SECONDARY FILES (ONLY IF REQUIRED)
+Max 1–2 additional files
+
+### 3. FUNCTION TARGET (IF APPLICABLE)
+
+### 4. CLAUDE PROMPT (FINAL COPY/PASTE BLOCK)
+
+---
+
+## RULES
+
+- ALWAYS use index.md first
+- NEVER suggest full system rewrites
+- NEVER include more than 3 files total
+- ALWAYS prefer one-file fixes
+- ALWAYS prefer function-level edits
+- DEFAULT to DIFF-ONLY mode
+
+---
+
+## ROUTING LOGIC
+
+### UI BUGS
+- calendar / layout → calendar.js + CSS file
+- gestures → gestures.js
+- diary UI → diary.js
+
+---
+
+### EDITING / TEXT
+- diary content → diary.js
+- themes → themes.js + themeEditor.js + themes.css
+
+---
+
+### SYNC ISSUES
+- ALWAYS start with sync.js
+- then check:
+  - calendar.js (calendar sync issues)
+  - ical.js (import/export issues)
+
+---
+
+### GESTURE ISSUES
+- gestures.js ONLY
+- unless explicitly proven UI-side issue
+
+---
+
+### NOTIFICATIONS
+- notifications.js ONLY
+
+---
+
+### UNDO / STATE BUGS
+- undo.js + diary.js
+
+---
+
+## PROMPT TEMPLATE OUTPUT
+
+You must output the final Claude prompt like this:
+
+---
+
+### CLAUDE PROMPT START
+
+Use /docs/index.md and /docs/rules.md
+
+TASK: <user task>
+
+FILE: <target file>
+
+FUNCTION: <function name or "unspecified">
+
+MODE: DIFF-ONLY
+
+RULES:
+- Only modify the specified function/file
+- No full file rewrites
+- No unrelated changes
+- Keep changes minimal
+
+ACTION:
+Fix the issue described.
+
+### CLAUDE PROMPT END
+
+---
+
+## EXAMPLE
+
+### INPUT
+
+TASK: swipe sometimes doesn't trigger on week view
+
+---
+
+### OUTPUT
+
+FILE: gestures.js  
+FUNCTION: detectSwipe()
+
+CLAUDE PROMPT:
+
+Use /docs/index.md and /docs/rules.md
+
+TASK: swipe sometimes doesn't trigger on week view
+
+FILE: gestures.js
+FUNCTION: detectSwipe()
+
+MODE: DIFF-ONLY
+
+RULES:
+- Only modify detectSwipe
+- No other files
+- No refactors
+
+ACTION:
+Fix swipe detection reliability issue.
+
+---
+
+## CORE PRINCIPLE
+
+You are NOT writing solutions.
+
+You are:
+→ routing work to the correct file  
+→ minimizing Claude’s search space  
+→ enforcing surgical edits only

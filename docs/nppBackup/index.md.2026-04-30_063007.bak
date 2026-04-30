@@ -1,0 +1,79 @@
+# PROJECT INDEX (READ FIRST)
+
+## CORE ARCHITECTURE
+- App Type: Android diary app (web-based UI layer)
+- Data Flow:
+  UI → State → Storage → Sync (Drive/Calendar)
+
+---
+
+## CORE FILES
+
+### EDITOR
+- diaryEditor.js → text editor, formatting, highlight, cursor handling
+- colorPicker.js → text + highlight colour picker UI + logic
+
+### UI VIEWS
+- weekView.js → renders week cards, visible week refresh
+- dayView.js → expanded day editor view
+- calendarUI.js → calendar layout + scroll container
+
+### STATE / DATA
+- state.js → global app state (active day, editor state, etc.)
+- storage.js → local save/load (pre-sync layer)
+
+### SYNC
+
+#### Google Drive
+- driveSync.js → save/load diary data to Google Drive
+- driveAuth.js → OAuth + token handling
+
+#### Google Calendar
+- calendarSync.js → push/pull events
+- calendarTransform.js → map diary ↔ calendar events
+
+---
+
+## INTERACTIONS
+- gestures.js → swipe + long press detection
+  - used by: weekView.js, dayView.js
+
+---
+
+## COMMON ENTRY POINTS
+
+Swipe issues  
+→ gestures.js  
+
+Highlight / colour bugs  
+→ diaryEditor.js OR colorPicker.js  
+
+Week not updating / UI stale  
+→ weekView.js (refreshVisibleWeekCards)  
+
+Day editor issues  
+→ dayView.js  
+
+Google Drive sync bugs  
+→ driveSync.js  
+
+Google Calendar sync bugs  
+→ calendarSync.js  
+
+Auth problems  
+→ driveAuth.js  
+
+---
+
+## CRITICAL FUNCTIONS (HIGH TOUCH)
+
+- refreshVisibleWeekCards() → week UI updates
+- detectSwipe() → gesture handling
+- _applyHiColor() → highlight logic
+- syncToDrive() → push data
+- syncFromDrive() → pull data
+
+---
+
+## RULES REFERENCE
+See: /docs/rules.md

@@ -600,21 +600,23 @@ export function initFormatToolbar() {
   }
 
   // ── Highlight ──
-  const hiApplyBtn = _toolbar.querySelector('#fmtHiApply');
-  const hiPickBtn  = _toolbar.querySelector('#fmtHiPick');
+ const hiApplyBtn = _toolbar.querySelector('#fmtHiApply');
+const hiPickBtn = _toolbar.querySelector('#fmtHiPick');
 
-  const _applyHiColor = c => {
-    _addRecentHiColor(c);
-    _lastHiColor = c;
-    _toolbar.querySelector('#fmtHiBar').style.background = c;
-  };
+const _applyHiColor = c => {
+  _addRecentHiColor(c);
+  _lastHiColor = c;
+  _toolbar.querySelector('#fmtHiBar').style.background = c;
+};
 
 _compoundApply(
   hiApplyBtn,
   () => _lastHiColor,
   () => {
-    const current = document.queryCommandValue('backColor');
-    if (_isSameColor(current, _lastHiColor)) {
+    const current = (document.queryCommandValue('backColor') || '').toLowerCase();
+    const target  = _lastHiColor.toLowerCase();
+    // toggle: if already highlighted with this colour, clear it
+    if (current === target) {
       return ['backColor', 'transparent'];
     }
     return ['backColor', _lastHiColor];
@@ -624,13 +626,10 @@ _compoundApply(
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      const current = (document.queryCommandValue('backColor') || '').toLowerCase();
+      const target  = c.toLowerCase();
+      _exec('backColor', current === target ? 'transparent' : c);
     }
-    _updateActiveStates();
   }
 );
 
@@ -639,11 +638,9 @@ hiApplyBtn._openCustomPicker = () => {
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      const current = (document.queryCommandValue('backColor') || '').toLowerCase();
+      const target  = c.toLowerCase();
+      _exec('backColor', current === target ? 'transparent' : c);
     }
     _updateActiveStates();
   });
@@ -655,30 +652,16 @@ const openHiPicker = e => {
     _applyHiColor(c);
     if (_activeEditable) {
       _activeEditable.focus();
-      const current = document.queryCommandValue('backColor');
-      _exec(
-        'backColor',
-        _isSameColor(current, c) ? 'transparent' : c
-      );
+      const current = (document.queryCommandValue('backColor') || '').toLowerCase();
+      const target  = c.toLowerCase();
+      _exec('backColor', current === target ? 'transparent' : c);
     }
     _updateActiveStates();
   });
 };
-
 hiPickBtn.addEventListener('mousedown', openHiPicker);
 hiPickBtn.addEventListener('touchend', openHiPicker);
 
-function _normalizeColor(c) {
-  if (!c) return '';
-  c = c.trim().toLowerCase();
-  if (c.startsWith('#')) return c;
-  const m = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!m) return c;
-  return _rgbToHex(+m[1], +m[2], +m[3]).toLowerCase();
-}
-function _isSameColor(a, b) {
-  return _normalizeColor(a) === _normalizeColor(b);
-}
 
   // ── Text colour ──
   function _applyTextColor(c) {
