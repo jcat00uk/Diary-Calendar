@@ -1019,6 +1019,14 @@ function openExpandedDay(dateKey, { replaceHistory = false, _skipSlideIn = false
 
   renderExpandedEvents(overlay, dateKey);
 
+  // On desktop, clicking non-focusable areas keeps diary focused and preserves selection.
+  // Explicitly blur the diary on mousedown outside the diary and toolbar.
+  overlay.addEventListener('mousedown', e => {
+    if (!e.target.closest('[contenteditable]') && !e.target.closest('.format-toolbar')) {
+      diaryEl?.blur();
+    }
+  });
+
   const navigateExpandedDay = (targetDate, slideFrom = 'right') => {
     const targetKey = formatDate(targetDate);
     goToWeek(targetDate);

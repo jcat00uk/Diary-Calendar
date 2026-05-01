@@ -92,10 +92,6 @@ export function initDiaryArea(el, getTextFn, setTextFn, opts = {}) {
         range.deleteContents();
         const br = document.createElement('br');
         range.insertNode(br);
-        // Ensure there is content after the <br> so the cursor has a position
-        if (!br.nextSibling) {
-          br.parentNode.appendChild(document.createElement('br'));
-        }
         range.setStartAfter(br);
         range.collapse(true);
         sel2.removeAllRanges();
